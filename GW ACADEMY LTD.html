@@ -1,0 +1,3200 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forex Trading Academy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    .progress-ring {
+      transform: rotate(-90deg);
+    }
+    .lesson-card {
+      transition: all 0.3s ease;
+    }
+    .lesson-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .quiz-option {
+      transition: all 0.2s ease;
+    }
+    .quiz-option:hover {
+      transform: scale(1.02);
+    }
+    .quiz-option.correct {
+      animation: correctAnswer 0.6s ease;
+    }
+    .quiz-option.incorrect {
+      animation: incorrectAnswer 0.6s ease;
+    }
+    @keyframes correctAnswer {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    @keyframes incorrectAnswer {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+    .module-header {
+      transition: all 0.3s ease;
+    }
+    .module-header:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    }
+    .fade-in {
+      animation: fadeIn 0.5s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .pulse {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    .candlestick {
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    .candlestick:hover {
+      transform: scale(1.1);
+    }
+    .chart-line {
+      stroke-dasharray: 1000;
+      stroke-dashoffset: 1000;
+      animation: drawLine 2s ease forwards;
+    }
+    @keyframes drawLine {
+      to { stroke-dashoffset: 0; }
+    }
+    .notification {
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(400px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .calculator-result {
+      animation: resultPop 0.4s ease;
+    }
+    @keyframes resultPop {
+      0% { transform: scale(0.8); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .progress-bar-fill {
+      transition: width 1s ease;
+    }
+    .btn-hover {
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-hover::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+    .btn-hover:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+    .ticker-scroll {
+      animation: scroll 30s linear infinite;
+    }
+    @keyframes scroll {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .ticker-scroll:hover {
+      animation-play-state: paused;
+    }
+    .price-up {
+      animation: priceUp 0.5s ease;
+    }
+    .price-down {
+      animation: priceDown 0.5s ease;
+    }
+    @keyframes priceUp {
+      0% { background-color: rgba(34, 197, 94, 0); }
+      50% { background-color: rgba(34, 197, 94, 0.3); }
+      100% { background-color: rgba(34, 197, 94, 0); }
+    }
+    @keyframes priceDown {
+      0% { background-color: rgba(239, 68, 68, 0); }
+      50% { background-color: rgba(239, 68, 68, 0.3); }
+      100% { background-color: rgba(239, 68, 68, 0); }
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full">
+  <div id="app" class="h-full w-full overflow-auto"></div>
+  <script>
+    const defaultConfig = {
+      background_color: "#0f172a",
+      surface_color: "#1e293b",
+      text_color: "#f1f5f9",
+      primary_action_color: "#3b82f6",
+      secondary_action_color: "#64748b",
+      font_family: "system-ui",
+      font_size: 16,
+      course_title: "Forex Trading Academy",
+      welcome_message: "Master the art of currency trading from beginner to professional",
+      footer_text: "© 2024 Forex Trading Academy. For educational purposes only."
+    };
+
+    let currentProgress = [];
+    let currentView = 'home';
+    let selectedModule = null;
+    let selectedLesson = null;
+    let quizAnswers = {};
+    let forexRates = {};
+    let previousRates = {};
+
+    // Fetch live Forex rates from API
+    async function fetchForexRates() {
+      try {
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        const data = await response.json();
+        
+        previousRates = { ...forexRates };
+        
+        // Convert to common Forex pairs
+        forexRates = {
+          'EUR/USD': data.rates.EUR ? (1 / data.rates.EUR).toFixed(5) : null,
+          'GBP/USD': data.rates.GBP ? (1 / data.rates.GBP).toFixed(5) : null,
+          'USD/JPY': data.rates.JPY ? data.rates.JPY.toFixed(3) : null,
+          'USD/CHF': data.rates.CHF ? data.rates.CHF.toFixed(5) : null,
+          'AUD/USD': data.rates.AUD ? (1 / data.rates.AUD).toFixed(5) : null,
+          'USD/CAD': data.rates.CAD ? data.rates.CAD.toFixed(5) : null,
+          'NZD/USD': data.rates.NZD ? (1 / data.rates.NZD).toFixed(5) : null
+        };
+        
+        renderTicker();
+      } catch (error) {
+        console.error('Failed to fetch Forex rates:', error);
+      }
+    }
+
+    function getPriceChange(pair) {
+      if (!previousRates[pair] || !forexRates[pair]) return 'neutral';
+      const prev = parseFloat(previousRates[pair]);
+      const current = parseFloat(forexRates[pair]);
+      if (current > prev) return 'up';
+      if (current < prev) return 'down';
+      return 'neutral';
+    }
+
+    function renderTicker() {
+      const tickerEl = document.getElementById('forex-ticker');
+      if (!tickerEl) return;
+
+      const pairs = Object.keys(forexRates);
+      const tickerHTML = `
+        <div class="flex gap-8 ticker-scroll">
+          ${pairs.map(pair => {
+            const rate = forexRates[pair];
+            const change = getPriceChange(pair);
+            const color = change === 'up' ? '#22c55e' : change === 'down' ? '#ef4444' : '#94a3b8';
+            const arrow = change === 'up' ? '▲' : change === 'down' ? '▼' : '●';
+            const animClass = change === 'up' ? 'price-up' : change === 'down' ? 'price-down' : '';
+            
+            return `
+              <div class="flex items-center gap-3 px-4 py-2 rounded ${animClass}">
+                <span class="font-bold text-sm">${pair}</span>
+                <span class="font-mono text-sm" style="color: ${color};">
+                  ${rate} <span class="text-xs">${arrow}</span>
+                </span>
+              </div>
+            `;
+          }).join('')}
+          ${pairs.map(pair => {
+            const rate = forexRates[pair];
+            const change = getPriceChange(pair);
+            const color = change === 'up' ? '#22c55e' : change === 'down' ? '#ef4444' : '#94a3b8';
+            const arrow = change === 'up' ? '▲' : change === 'down' ? '▼' : '●';
+            const animClass = change === 'up' ? 'price-up' : change === 'down' ? 'price-down' : '';
+            
+            return `
+              <div class="flex items-center gap-3 px-4 py-2 rounded ${animClass}">
+                <span class="font-bold text-sm">${pair}</span>
+                <span class="font-mono text-sm" style="color: ${color};">
+                  ${rate} <span class="text-xs">${arrow}</span>
+                </span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+      
+      tickerEl.innerHTML = tickerHTML;
+    }
+
+    // Update rates every 10 seconds
+    setInterval(fetchForexRates, 10000);
+
+    const modules = [
+      {
+        id: "module-1",
+        title: "Forex Fundamentals",
+        level: "Beginner",
+        lessons: [
+          {
+            id: "lesson-1-1",
+            title: "What is Forex Trading?",
+            duration: "15 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Understanding Forex Trading</h3>
+              
+              <!-- Visual: Globe representing global market -->
+              <div class="mb-6 p-6 rounded-xl text-center" style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);">
+                <svg viewBox="0 0 200 200" class="w-48 h-48 mx-auto mb-4">
+                  <circle cx="100" cy="100" r="80" fill="#60a5fa" opacity="0.3"/>
+                  <circle cx="100" cy="100" r="70" fill="none" stroke="#60a5fa" stroke-width="2" stroke-dasharray="5,5"/>
+                  <text x="100" y="80" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold">$6.6T</text>
+                  <text x="100" y="110" text-anchor="middle" fill="#fff" font-size="14">Daily Volume</text>
+                  <text x="100" y="130" text-anchor="middle" fill="#fff" font-size="12">24/5 Trading</text>
+                </svg>
+                <p class="text-lg font-semibold">The world's largest financial market</p>
+              </div>
+
+              <p class="mb-4">The Foreign Exchange market (Forex/FX) is the world's largest financial market where currencies are traded. With over $6.6 trillion traded daily, it operates 24 hours a day, 5 days a week.</p>
+              
+              <h4 class="text-lg font-semibold mb-2">Key Concepts:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li><strong>Currency Pairs:</strong> Currencies are traded in pairs (e.g., EUR/USD). The first currency is the base, the second is the quote.</li>
+                <li><strong>Pip:</strong> The smallest price move in a currency pair (usually 0.0001)</li>
+                <li><strong>Lot Size:</strong> Standard (100,000 units), Mini (10,000), Micro (1,000)</li>
+                <li><strong>Leverage:</strong> Borrowing capital to increase potential returns (and risks)</li>
+              </ul>
+
+              <!-- Visual Example: Currency Pair Display -->
+              <div class="bg-blue-900 bg-opacity-30 p-6 rounded-lg mb-4">
+                <h4 class="font-semibold mb-4 text-center">💡 Live Example: EUR/USD Price Movement</h4>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                  <div class="bg-black bg-opacity-30 p-4 rounded-lg text-center">
+                    <div class="text-sm opacity-70 mb-1">Initial Price</div>
+                    <div class="text-3xl font-bold text-blue-400">1.1000</div>
+                  </div>
+                  <div class="bg-black bg-opacity-30 p-4 rounded-lg text-center">
+                    <div class="text-sm opacity-70 mb-1">New Price</div>
+                    <div class="text-3xl font-bold text-green-400">1.1050</div>
+                    <div class="text-sm text-green-400 mt-1">+50 pips ���</div>
+                  </div>
+                </div>
+                <div class="text-center p-4 bg-green-900 bg-opacity-30 rounded">
+                  <p class="mb-2"><strong>What happened?</strong></p>
+                  <p class="text-sm">1 Euro went from $1.10 to $1.105 USD. If you bought 1 standard lot (100,000 EUR), you gained <strong>$500</strong> (50 pips × $10/pip)</p>
+                </div>
+              </div>
+
+              <!-- Visual: Lot Size Comparison -->
+              <div class="mb-4 p-4 rounded-lg" style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%);">
+                <h4 class="font-semibold mb-3 text-center">📊 Lot Size Comparison</h4>
+                <div class="space-y-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-32 h-12 bg-blue-600 rounded flex items-center justify-center text-xs font-bold">STANDARD</div>
+                    <div class="flex-1">100,000 units • $10/pip • Pro traders</div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div class="w-24 h-10 bg-blue-500 rounded flex items-center justify-center text-xs font-bold">MINI</div>
+                    <div class="flex-1">10,000 units • $1/pip • Intermediate</div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div class="w-16 h-8 bg-blue-400 rounded flex items-center justify-center text-xs font-bold">MICRO</div>
+                    <div class="flex-1">1,000 units ����� $0.10/pip • Beginners</div>
+                  </div>
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Market Participants:</h4>
+              <ul class="list-disc pl-6 space-y-2">
+                <li>Central Banks</li>
+                <li>Commercial Banks</li>
+                <li>Hedge Funds</li>
+                <li>Retail Traders (You!)</li>
+              </ul>
+            `,
+            quiz: {
+              question: "What does a pip typically represent in Forex trading?",
+              options: [
+                "A 1% price movement",
+                "The smallest price move (usually 0.0001)",
+                "A 10-point movement",
+                "The daily trading volume"
+              ],
+              correct: 1
+            }
+          },
+          {
+            id: "lesson-1-2",
+            title: "Major Currency Pairs",
+            duration: "12 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Understanding Currency Pairs</h3>
+              
+              <h4 class="text-lg font-semibold mb-2">Major Pairs (Most Liquid):</h4>
+              <div class="space-y-3 mb-4">
+                <div class="bg-blue-900 bg-opacity-20 p-3 rounded">
+                  <strong>EUR/USD</strong> - Euro vs US Dollar (Most traded pair)
+                </div>
+                <div class="bg-blue-900 bg-opacity-20 p-3 rounded">
+                  <strong>USD/JPY</strong> - US Dollar vs Japanese Yen
+                </div>
+                <div class="bg-blue-900 bg-opacity-20 p-3 rounded">
+                  <strong>GBP/USD</strong> - British Pound vs US Dollar ("Cable")
+                </div>
+                <div class="bg-blue-900 bg-opacity-20 p-3 rounded">
+                  <strong>USD/CHF</strong> - US Dollar vs Swiss Franc
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Commodity Pairs:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li><strong>AUD/USD</strong> - Australian Dollar (Gold, Mining)</li>
+                <li><strong>USD/CAD</strong> - Canadian Dollar (Oil)</li>
+                <li><strong>NZD/USD</strong> - New Zealand Dollar (Agriculture)</li>
+              </ul>
+
+              <div class="bg-green-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">📊 Trading Tip:</h4>
+                <p>Begin with major pairs as they have tighter spreads, higher liquidity, and more predictable movements. EUR/USD typically has the lowest spread.</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Spread Explained:</h4>
+              <p class="mb-2">The difference between bid (sell) and ask (buy) price. Lower spreads mean lower trading costs.</p>
+              <p class="italic">Example: EUR/USD Bid: 1.1000 | Ask: 1.1002 = 2 pip spread</p>
+            `,
+            quiz: {
+              question: "Which currency pair is known as 'Cable'?",
+              options: ["EUR/USD", "USD/JPY", "GBP/USD", "USD/CHF"],
+              correct: 2
+            }
+          },
+          {
+            id: "lesson-1-3",
+            title: "Market Sessions & Timing",
+            duration: "10 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Global Trading Sessions</h3>
+              
+              <p class="mb-4">Forex operates 24/5 across four major sessions. Each has unique characteristics:</p>
+
+              <!-- Visual: 24-Hour Trading Clock -->
+              <div class="mb-6 p-6 rounded-xl" style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%);">
+                <h4 class="font-semibold mb-4 text-center">⏰ 24-Hour Forex Trading Clock (GMT)</h4>
+                <svg viewBox="0 0 400 200" class="w-full h-auto">
+                  <!-- Sydney Session -->
+                  <rect x="10" y="20" width="80" height="40" rx="5" fill="#3b82f6" opacity="0.5"/>
+                  <text x="50" y="35" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">SYDNEY</text>
+                  <text x="50" y="50" text-anchor="middle" fill="#fff" font-size="8">22:00-07:00</text>
+                  
+                  <!-- Tokyo Session -->
+                  <rect x="90" y="20" width="90" height="40" rx="5" fill="#a855f7" opacity="0.6"/>
+                  <text x="135" y="35" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">TOKYO</text>
+                  <text x="135" y="50" text-anchor="middle" fill="#fff" font-size="8">00:00-09:00</text>
+                  
+                  <!-- London Session -->
+                  <rect x="160" y="20" width="120" height="40" rx="5" fill="#22c55e" opacity="0.7"/>
+                  <text x="220" y="35" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">LONDON ⭐</text>
+                  <text x="220" y="50" text-anchor="middle" fill="#fff" font-size="8">08:00-17:00</text>
+                  
+                  <!-- New York Session -->
+                  <rect x="230" y="20" width="120" height="40" rx="5" fill="#ef4444" opacity="0.6"/>
+                  <text x="290" y="35" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">NEW YORK</text>
+                  <text x="290" y="50" text-anchor="middle" fill="#fff" font-size="8">13:00-22:00</text>
+                  
+                  <!-- Overlap Highlight -->
+                  <rect x="230" y="75" width="50" height="30" rx="5" fill="#fbbf24" opacity="0.8"/>
+                  <text x="255" y="88" text-anchor="middle" fill="#000" font-size="9" font-weight="bold">OVERLAP</text>
+                  <text x="255" y="100" text-anchor="middle" fill="#000" font-size="7">13:00-17:00</text>
+                  
+                  <!-- Volume bars -->
+                  <text x="10" y="130" fill="#94a3b8" font-size="9">Volume:</text>
+                  <rect x="10" y="140" width="30" height="50" fill="#3b82f6" opacity="0.5"/>
+                  <rect x="90" y="125" width="40" height="65" fill="#a855f7" opacity="0.6"/>
+                  <rect x="160" y="100" width="60" height="90" fill="#22c55e" opacity="0.7"/>
+                  <rect x="230" y="110" width="60" height="80" fill="#ef4444" opacity="0.6"/>
+                  <rect x="230" y="85" width="50" height="105" fill="#fbbf24" opacity="0.3"/>
+                  <text x="255" y="175" text-anchor="middle" fill="#fbbf24" font-size="8" font-weight="bold">BEST!</text>
+                </svg>
+              </div>
+
+              <div class="space-y-3 mb-4">
+                <div class="bg-blue-900 bg-opacity-20 p-4 rounded">
+                  <h4 class="font-semibold mb-2">🌏 Sydney Session (10 PM - 7 AM GMT)</h4>
+                  <p class="mb-2">Quietest session. Good for AUD and NZD pairs.</p>
+                  <div class="text-xs opacity-70">Average pip range: 50-80 pips</div>
+                </div>
+                
+                <div class="bg-purple-900 bg-opacity-20 p-4 rounded">
+                  <h4 class="font-semibold mb-2">🗼 Tokyo Session (12 AM - 9 AM GMT)</h4>
+                  <p class="mb-2">Asian market opens. High activity in JPY pairs. Sets Asian trading range.</p>
+                  <div class="text-xs opacity-70">Average pip range: 60-100 pips</div>
+                </div>
+                
+                <div class="bg-green-900 bg-opacity-20 p-4 rounded">
+                  <h4 class="font-semibold mb-2">🏛️ London Session (8 AM - 5 PM GMT)</h4>
+                  <p class="mb-2">Highest volume! 35% of Forex turnover. Major trends often begin here.</p>
+                  <div class="text-xs opacity-70">Average pip range: 100-150 pips • BEST for trend trading</div>
+                </div>
+                
+                <div class="bg-red-900 bg-opacity-20 p-4 rounded">
+                  <h4 class="font-semibold mb-2">🗽 New York Session (1 PM - 10 PM GMT)</h4>
+                  <p class="mb-2">Second highest volume. USD pairs most active. Economic data releases.</p>
+                  <div class="text-xs opacity-70">Average pip range: 80-120 pips</div>
+                </div>
+              </div>
+
+              <div class="bg-yellow-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">⚡ Best Trading Times:</h4>
+                <p class="mb-2"><strong>London/New York Overlap (1-5 PM GMT):</strong> Highest volatility and liquidity. 50% of daily volume occurs here.</p>
+                <p><strong>London Open (8-9 AM GMT):</strong> Major moves as European traders enter.</p>
+              </div>
+
+              <p class="text-sm italic">Avoid trading during session transitions and low liquidity periods (weekends, holidays).</p>
+            `,
+            quiz: {
+              question: "Which session overlap offers the highest trading volume?",
+              options: ["Sydney/Tokyo", "Tokyo/London", "London/New York", "New York/Sydney"],
+              correct: 2
+            }
+          }
+        ]
+      },
+      {
+        id: "module-2",
+        title: "Technical Analysis",
+        level: "Intermediate",
+        lessons: [
+          {
+            id: "lesson-2-1",
+            title: "Chart Types & Patterns",
+            duration: "20 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Reading Forex Charts</h3>
+              
+              <h4 class="text-lg font-semibold mb-2">Chart Types:</h4>
+              <div class="space-y-3 mb-4">
+                <div class="bg-blue-900 bg-opacity-20 p-3 rounded">
+                  <strong>📈 Line Chart:</strong> Connects closing prices. Simple but limited information.
+                </div>
+                <div class="bg-blue-900 bg-opacity-20 p-3 rounded">
+                  <strong>📊 Bar Chart:</strong> Shows Open, High, Low, Close (OHLC). More detailed.
+                </div>
+                <div class="bg-blue-900 bg-opacity-20 p-3 rounded">
+                  <strong>🕯️ Candlestick Chart:</strong> Most popular! Visual representation of price action.
+                </div>
+              </div>
+
+              <!-- Visual: Candlestick Anatomy -->
+              <div class="mb-6 p-6 rounded-xl" style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%);">
+                <h4 class="font-semibold mb-4 text-center">🕯️ Candlestick Anatomy</h4>
+                <svg viewBox="0 0 500 300" class="w-full h-auto mb-4">
+                  <!-- Bullish Candle -->
+                  <text x="100" y="25" text-anchor="middle" fill="#22c55e" font-size="14" font-weight="bold">BULLISH CANDLE</text>
+                  <line x1="100" y1="50" x2="100" y2="80" stroke="#22c55e" stroke-width="2"/>
+                  <rect x="80" y="80" width="40" height="100" fill="#22c55e" stroke="#22c55e" stroke-width="2"/>
+                  <line x1="100" y1="180" x2="100" y2="220" stroke="#22c55e" stroke-width="2"/>
+                  
+                  <text x="40" y="60" fill="#94a3b8" font-size="10">← High</text>
+                  <text x="40" y="90" fill="#94a3b8" font-size="10">← Open</text>
+                  <text x="40" y="180" fill="#94a3b8" font-size="10">← Close</text>
+                  <text x="40" y="220" fill="#94a3b8" font-size="10">← Low</text>
+                  
+                  <text x="160" y="60" fill="#94a3b8" font-size="10">Upper Wick</text>
+                  <text x="160" y="130" fill="#94a3b8" font-size="10">Body (Green)</text>
+                  <text x="160" y="210" fill="#94a3b8" font-size="10">Lower Wick</text>
+                  
+                  <!-- Bearish Candle -->
+                  <text x="350" y="25" text-anchor="middle" fill="#ef4444" font-size="14" font-weight="bold">BEARISH CANDLE</text>
+                  <line x1="350" y1="50" x2="350" y2="80" stroke="#ef4444" stroke-width="2"/>
+                  <rect x="330" y="80" width="40" height="100" fill="#ef4444" stroke="#ef4444" stroke-width="2"/>
+                  <line x1="350" y1="180" x2="350" y2="220" stroke="#ef4444" stroke-width="2"/>
+                  
+                  <text x="390" y="60" fill="#94a3b8" font-size="10">High →</text>
+                  <text x="390" y="90" fill="#94a3b8" font-size="10">Close →</text>
+                  <text x="390" y="180" fill="#94a3b8" font-size="10">Open →</text>
+                  <text x="390" y="220" fill="#94a3b8" font-size="10">Low →</text>
+                  
+                  <!-- Meaning -->
+                  <text x="100" y="260" text-anchor="middle" fill="#22c55e" font-size="11">Buyers in Control</text>
+                  <text x="100" y="275" text-anchor="middle" fill="#22c55e" font-size="10">Close > Open</text>
+                  
+                  <text x="350" y="260" text-anchor="middle" fill="#ef4444" font-size="11">Sellers in Control</text>
+                  <text x="350" y="275" text-anchor="middle" fill="#ef4444" font-size="10">Close < Open</text>
+                </svg>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Key Patterns:</h4>
+              
+              <!-- Visual: Common Candlestick Patterns -->
+              <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="p-4 rounded-lg bg-blue-900 bg-opacity-20">
+                  <div class="text-center mb-2">
+                    <svg viewBox="0 0 60 100" class="w-16 h-24 mx-auto">
+                      <line x1="30" y1="20" x2="30" y2="30" stroke="#94a3b8" stroke-width="2"/>
+                      <rect x="25" y="30" width="10" height="5" fill="#94a3b8"/>
+                      <line x1="30" y1="35" x2="30" y2="80" stroke="#94a3b8" stroke-width="2"/>
+                    </svg>
+                  </div>
+                  <strong class="block text-center mb-1">Doji</strong>
+                  <p class="text-xs text-center">Open = Close<br>Indecision signal</p>
+                </div>
+                
+                <div class="p-4 rounded-lg bg-green-900 bg-opacity-20">
+                  <div class="text-center mb-2">
+                    <svg viewBox="0 0 60 100" class="w-16 h-24 mx-auto">
+                      <line x1="30" y1="30" x2="30" y2="40" stroke="#22c55e" stroke-width="2"/>
+                      <rect x="20" y="40" width="20" height="15" fill="#22c55e"/>
+                      <line x1="30" y1="55" x2="30" y2="90" stroke="#22c55e" stroke-width="2"/>
+                    </svg>
+                  </div>
+                  <strong class="block text-center mb-1 text-green-400">Hammer</strong>
+                  <p class="text-xs text-center">Long lower wick<br>Bullish reversal</p>
+                </div>
+                
+                <div class="p-4 rounded-lg bg-red-900 bg-opacity-20">
+                  <div class="text-center mb-2">
+                    <svg viewBox="0 0 60 100" class="w-16 h-24 mx-auto">
+                      <line x1="30" y1="10" x2="30" y2="45" stroke="#ef4444" stroke-width="2"/>
+                      <rect x="20" y="45" width="20" height="15" fill="#ef4444"/>
+                      <line x1="30" y1="60" x2="30" y2="70" stroke="#ef4444" stroke-width="2"/>
+                    </svg>
+                  </div>
+                  <strong class="block text-center mb-1 text-red-400">Shooting Star</strong>
+                  <p class="text-xs text-center">Long upper wick<br>Bearish reversal</p>
+                </div>
+                
+                <div class="p-4 rounded-lg bg-purple-900 bg-opacity-20">
+                  <div class="text-center mb-2">
+                    <svg viewBox="0 0 80 100" class="w-20 h-24 mx-auto">
+                      <rect x="25" y="35" width="15" height="25" fill="#ef4444"/>
+                      <rect x="42" y="25" width="18" height="45" fill="#22c55e"/>
+                    </svg>
+                  </div>
+                  <strong class="block text-center mb-1 text-purple-400">Engulfing</strong>
+                  <p class="text-xs text-center">Covers previous candle<br>Strong reversal</p>
+                </div>
+              </div>
+
+              <!-- Real Example -->
+              <div class="bg-green-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-3 text-center">📊 Real Trade Example: Hammer Pattern</h4>
+                <svg viewBox="0 0 600 200" class="w-full h-auto mb-3">
+                  <!-- Price candles showing downtrend then hammer -->
+                  <rect x="50" y="40" width="30" height="60" fill="#ef4444"/>
+                  <rect x="100" y="60" width="30" height="50" fill="#ef4444"/>
+                  <rect x="150" y="75" width="30" height="45" fill="#ef4444"/>
+                  <rect x="200" y="90" width="30" height="35" fill="#ef4444"/>
+                  
+                  <!-- Hammer candle -->
+                  <line x1="265" y1="100" x2="265" y2="115" stroke="#22c55e" stroke-width="3"/>
+                  <rect x="250" y="115" width="30" height="15" fill="#22c55e" stroke="#22c55e" stroke-width="2"/>
+                  <line x1="265" y1="130" x2="265" y2="175" stroke="#22c55e" stroke-width="3"/>
+                  <circle cx="265" cy="165" r="5" fill="#fbbf24"/>
+                  <text x="265" y="195" text-anchor="middle" fill="#fbbf24" font-size="12" font-weight="bold">HAMMER!</text>
+                  
+                  <!-- Uptrend after -->
+                  <rect x="320" y="100" width="30" height="35" fill="#22c55e"/>
+                  <rect x="370" y="80" width="30" height="45" fill="#22c55e"/>
+                  <rect x="420" y="60" width="30" height="50" fill="#22c55e"/>
+                  <rect x="470" y="40" width="30" height="60" fill="#22c55e"/>
+                  
+                  <!-- Arrows and labels -->
+                  <text x="100" y="25" fill="#ef4444" font-size="12">Downtrend</text>
+                  <text x="400" y="25" fill="#22c55e" font-size="12">Reversal!</text>
+                  
+                  <text x="265" y="15" text-anchor="middle" fill="#fbbf24" font-size="10">Entry: 1.0950</text>
+                  <path d="M 280 120 L 310 110" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+                </svg>
+                <p class="text-sm text-center">After a downtrend, a hammer formed at 1.0950 support. This signaled buyer strength. Price reversed upward for 80+ pips!</p>
+              </div>
+
+              <div class="bg-green-900 bg-opacity-30 p-4 rounded-lg">
+                <h4 class="font-semibold mb-2">�� Pro Tip:</h4>
+                <p>Never trade patterns in isolation. Confirm with support/resistance, trend direction, and volume indicators.</p>
+              </div>
+            `,
+            quiz: {
+              question: "What does a Doji candlestick pattern indicate?",
+              options: [
+                "Strong bullish momentum",
+                "Strong bearish momentum",
+                "Market indecision",
+                "High trading volume"
+              ],
+              correct: 2
+            }
+          },
+          {
+            id: "lesson-2-2",
+            title: "Support & Resistance",
+            duration: "18 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Understanding Support & Resistance</h3>
+              
+              <p class="mb-4">These are price levels where buying or selling pressure is concentrated, causing price reversals or consolidation.</p>
+
+              <!-- Visual: Support and Resistance Chart -->
+              <div class="mb-6 p-6 rounded-xl" style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%);">
+                <h4 class="font-semibold mb-4 text-center">📊 Support & Resistance in Action</h4>
+                <svg viewBox="0 0 600 300" class="w-full h-auto">
+                  <!-- Resistance Line -->
+                  <line x1="50" y1="60" x2="550" y2="60" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,5"/>
+                  <text x="560" y="65" fill="#ef4444" font-size="12" font-weight="bold">RESISTANCE</text>
+                  <text x="470" y="50" fill="#ef4444" font-size="10">1.1200</text>
+                  
+                  <!-- Support Line -->
+                  <line x1="50" y1="220" x2="550" y2="220" stroke="#22c55e" stroke-width="3" stroke-dasharray="5,5"/>
+                  <text x="560" y="225" fill="#22c55e" font-size="12" font-weight="bold">SUPPORT</text>
+                  <text x="470" y="240" fill="#22c55e" font-size="10">1.0800</text>
+                  
+                  <!-- Price movement bouncing -->
+                  <path d="M 50 220 L 100 180 L 150 140 L 200 70 L 250 80 L 300 100 L 350 70 L 400 90 L 450 140 L 500 210 L 550 180"
+                        stroke="#3b82f6" stroke-width="3" fill="none"/>
+                  
+                  <!-- Bounce points -->
+                  <circle cx="50" cy="220" r="6" fill="#fbbf24"/>
+                  <circle cx="200" cy="70" r="6" fill="#fbbf24"/>
+                  <circle cx="350" cy="70" r="6" fill="#fbbf24"/>
+                  <circle cx="500" cy="210" r="6" fill="#fbbf24"/>
+                  
+                  <!-- Labels -->
+                  <text x="50" y="245" text-anchor="middle" fill="#fbbf24" font-size="9">Bounce 1</text>
+                  <text x="200" y="50" text-anchor="middle" fill="#fbbf24" font-size="9">Reject</text>
+                  <text x="350" y="50" text-anchor="middle" fill="#fbbf24" font-size="9">Reject</text>
+                  <text x="500" y="245" text-anchor="middle" fill="#fbbf24" font-size="9">Bounce 2</text>
+                  
+                  <!-- Zone shading -->
+                  <rect x="50" y="55" width="500" height="15" fill="#ef4444" opacity="0.1"/>
+                  <rect x="50" y="210" width="500" height="15" fill="#22c55e" opacity="0.1"/>
+                  
+                  <text x="300" y="280" text-anchor="middle" fill="#94a3b8" font-size="11">Price respects these levels multiple times</text>
+                </svg>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Support Level:</h4>
+              <div class="bg-green-900 bg-opacity-20 p-4 rounded mb-4">
+                <p class="mb-2">A price level where buying interest is strong enough to prevent further decline.</p>
+                <p class="italic">Think: "The floor" - Price bounces up from here</p>
+                <p class="mt-2"><strong>Example:</strong> EUR/USD repeatedly finds buyers at 1.0800</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Resistance Level:</h4>
+              <div class="bg-red-900 bg-opacity-20 p-4 rounded mb-4">
+                <p class="mb-2">A price level where selling interest is strong enough to prevent further rise.</p>
+                <p class="italic">Think: "The ceiling" - Price bounces down from here</p>
+                <p class="mt-2"><strong>Example:</strong> GBP/USD struggles to break above 1.2500</p>
+              </div>
+
+              <!-- Real Trade Example -->
+              <div class="bg-blue-900 bg-opacity-30 p-6 rounded-lg mb-4">
+                <h4 class="font-semibold mb-4 text-center">💡 Real Trade Example: Support Bounce</h4>
+                <svg viewBox="0 0 500 250" class="w-full h-auto mb-4">
+                  <!-- Support level -->
+                  <line x1="50" y1="180" x2="450" y2="180" stroke="#22c55e" stroke-width="3" stroke-dasharray="5,5"/>
+                  <text x="460" y="185" fill="#22c55e" font-size="12">1.0950</text>
+                  
+                  <!-- Downtrend to support -->
+                  <rect x="80" y="60" width="25" height="50" fill="#ef4444"/>
+                  <rect x="130" y="85" width="25" height="60" fill="#ef4444"/>
+                  <rect x="180" y="105" width="25" height="65" fill="#ef4444"/>
+                  
+                  <!-- Touch support with rejection candle -->
+                  <line x1="242" y1="165" x2="242" y2="175" stroke="#22c55e" stroke-width="2"/>
+                  <rect x="230" y="145" width="25" height="30" fill="#22c55e"/>
+                  <line x1="242" y1="145" x2="242" y2="200" stroke="#22c55e" stroke-width="2"/>
+                  
+                  <!-- Stars and highlight -->
+                  <circle cx="242" cy="190" r="8" fill="#fbbf24" opacity="0.5"/>
+                  <text x="242" y="225" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="bold">ENTRY HERE!</text>
+                  <text x="242" y="240" text-anchor="middle" fill="#fff" font-size="9">Buy at 1.0960</text>
+                  
+                  <!-- Uptrend after bounce -->
+                  <rect x="280" y="135" width="25" height="40" fill="#22c55e"/>
+                  <rect x="330" y="110" width="25" height="55" fill="#22c55e"/>
+                  <rect x="380" y="80" width="25" height="75" fill="#22c55e"/>
+                  
+                  <!-- Profit target -->
+                  <line x1="420" y1="80" x2="450" y2="60" stroke="#fbbf24" stroke-width="2"/>
+                  <text x="455" y="65" fill="#fbbf24" font-size="10">+80 pips!</text>
+                  
+                  <!-- Stop loss -->
+                  <line x1="50" y1="200" x2="450" y2="200" stroke="#ef4444" stroke-width="1" stroke-dasharray="2,2"/>
+                  <text x="460" y="205" fill="#ef4444" font-size="9">SL: 1.0920</text>
+                </svg>
+                <div class="grid grid-cols-3 gap-3 text-center text-sm">
+                  <div class="p-2 bg-black bg-opacity-30 rounded">
+                    <div class="text-xs opacity-70">Entry</div>
+                    <div class="font-bold text-blue-400">1.0960</div>
+                  </div>
+                  <div class="p-2 bg-black bg-opacity-30 rounded">
+                    <div class="text-xs opacity-70">Stop Loss</div>
+                    <div class="font-bold text-red-400">1.0920</div>
+                  </div>
+                  <div class="p-2 bg-black bg-opacity-30 rounded">
+                    <div class="text-xs opacity-70">Take Profit</div>
+                    <div class="font-bold text-green-400">1.1040</div>
+                  </div>
+                </div>
+                <p class="text-center mt-3 text-sm"><strong>Result:</strong> Risk 40 pips, Gained 80 pips = 1:2 Risk:Reward ✓</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Key Concepts:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li><strong>Role Reversal:</strong> Broken support becomes resistance (and vice versa)</li>
+                <li><strong>Zones vs Lines:</strong> Think of areas rather than exact prices</li>
+                <li><strong>Multiple Touches:</strong> More touches = stronger level</li>
+                <li><strong>Psychological Levels:</strong> Round numbers (1.1000, 1.2000) act as barriers</li>
+              </ul>
+
+              <div class="bg-blue-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">📊 Trading Strategy:</h4>
+                <p class="mb-2"><strong>Buy at Support:</strong> Enter long when price approaches support with confirmation</p>
+                <p><strong>Sell at Resistance:</strong> Enter short when price approaches resistance with confirmation</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Identifying S&R Levels:</h4>
+              <ol class="list-decimal pl-6 space-y-2">
+                <li>Look at historical highs and lows</li>
+                <li>Find areas where price reversed multiple times</li>
+                <li>Note round number levels</li>
+                <li>Use trendlines to connect swing points</li>
+              </ol>
+            `,
+            quiz: {
+              question: "What typically happens when support is broken?",
+              options: [
+                "It disappears permanently",
+                "It becomes a resistance level",
+                "Price always reverses immediately",
+                "Trading volume decreases"
+              ],
+              correct: 1
+            }
+          },
+          {
+            id: "lesson-2-3",
+            title: "Trend Analysis",
+            duration: "16 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Identifying and Trading Trends</h3>
+              
+              <p class="mb-4 font-semibold">"The trend is your friend" - Most profitable trades align with the trend.</p>
+
+              <h4 class="text-lg font-semibold mb-2">Types of Trends:</h4>
+              <div class="space-y-3 mb-4">
+                <div class="bg-green-900 bg-opacity-20 p-3 rounded">
+                  <strong>📈 Uptrend:</strong> Higher Highs (HH) + Higher Lows (HL)<br>
+                  <span class="text-sm">Strategy: Buy dips to support, target resistance</span>
+                </div>
+                <div class="bg-red-900 bg-opacity-20 p-3 rounded">
+                  <strong>📉 Downtrend:</strong> Lower Highs (LH) + Lower Lows (LL)<br>
+                  <span class="text-sm">Strategy: Sell rallies to resistance, target support</span>
+                </div>
+                <div class="bg-gray-600 bg-opacity-20 p-3 rounded">
+                  <strong>↔️ Sideways/Range:</strong> Price moves between support and resistance<br>
+                  <span class="text-sm">Strategy: Buy at support, sell at resistance</span>
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Timeframe Analysis:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li><strong>Primary Trend:</strong> Daily/Weekly charts - Overall direction</li>
+                <li><strong>Secondary Trend:</strong> 4H charts - Short-term corrections</li>
+                <li><strong>Minor Trend:</strong> 1H charts - Entry/exit timing</li>
+              </ul>
+
+              <div class="bg-yellow-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">⚠️ Trend Reversal Signals:</h4>
+                <ul class="list-disc pl-6 space-y-1">
+                  <li>Trendline break</li>
+                  <li>Failure to make new highs/lows</li>
+                  <li>Divergence with indicators</li>
+                  <li>Volume spike on reversal</li>
+                </ul>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Drawing Trendlines:</h4>
+              <ol class="list-decimal pl-6 space-y-2">
+                <li>Uptrend: Connect at least 2 swing lows</li>
+                <li>Downtrend: Connect at least 2 swing highs</li>
+                <li>More touches = stronger trendline</li>
+                <li>Adjust as new swing points form</li>
+              </ol>
+
+              <p class="mt-4 text-sm italic">Remember: Never fight the trend. Wait for confirmation before trading reversals.</p>
+            `,
+            quiz: {
+              question: "What characterizes an uptrend?",
+              options: [
+                "Lower highs and lower lows",
+                "Higher highs and higher lows",
+                "Sideways price movement",
+                "High volatility only"
+              ],
+              correct: 1
+            }
+          },
+          {
+            id: "lesson-2-4",
+            title: "Technical Indicators",
+            duration: "22 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Essential Trading Indicators</h3>
+              
+              <h4 class="text-lg font-semibold mb-2">Moving Averages (MA):</h4>
+              <div class="space-y-3 mb-4">
+                <div class="bg-blue-900 bg-opacity-20 p-4 rounded">
+                  <strong>Simple MA (SMA):</strong> Average price over X periods<br>
+                  <span class="text-sm">Popular: 50 SMA, 200 SMA</span>
+                </div>
+                <div class="bg-blue-900 bg-opacity-20 p-4 rounded">
+                  <strong>Exponential MA (EMA):</strong> Gives more weight to recent prices<br>
+                  <span class="text-sm">Popular: 12 EMA, 26 EMA</span>
+                </div>
+              </div>
+
+              <p class="mb-4"><strong>Golden Cross:</strong> 50 MA crosses above 200 MA = Bullish signal</p>
+              <p class="mb-4"><strong>Death Cross:</strong> 50 MA crosses below 200 MA = Bearish signal</p>
+
+              <h4 class="text-lg font-semibold mb-2">RSI (Relative Strength Index):</h4>
+              <div class="bg-purple-900 bg-opacity-20 p-4 rounded mb-4">
+                <p class="mb-2">Measures momentum on a scale of 0-100</p>
+                <ul class="list-disc pl-6 space-y-1">
+                  <li><strong>Above 70:</strong> Overbought (potential sell)</li>
+                  <li><strong>Below 30:</strong> Oversold (potential buy)</li>
+                  <li><strong>Divergence:</strong> Price makes new high/low but RSI doesn't = reversal warning</li>
+                </ul>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">MACD (Moving Average Convergence Divergence):</h4>
+              <div class="bg-green-900 bg-opacity-20 p-4 rounded mb-4">
+                <p class="mb-2">Shows relationship between two EMAs (12 and 26)</p>
+                <ul class="list-disc pl-6 space-y-1">
+                  <li><strong>MACD Line crosses above Signal:</strong> Buy signal</li>
+                  <li><strong>MACD Line crosses below Signal:</strong> Sell signal</li>
+                  <li><strong>Histogram:</strong> Shows strength of momentum</li>
+                </ul>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Bollinger Bands:</h4>
+              <div class="bg-orange-900 bg-opacity-20 p-4 rounded mb-4">
+                <p class="mb-2">Middle band (20 SMA) + Upper/Lower bands (2 standard deviations)</p>
+                <ul class="list-disc pl-6 space-y-1">
+                  <li>Price at upper band = overbought</li>
+                  <li>Price at lower band = oversold</li>
+                  <li>Band squeeze = volatility breakout coming</li>
+                </ul>
+              </div>
+
+              <div class="bg-red-900 bg-opacity-30 p-4 rounded-lg">
+                <h4 class="font-semibold mb-2">⚠️ Warning:</h4>
+                <p>Indicators LAG price action. Use them for confirmation, not as standalone signals. Combine multiple indicators for best results.</p>
+              </div>
+            `,
+            quiz: {
+              question: "What does an RSI reading above 70 typically indicate?",
+              options: [
+                "Strong buy signal",
+                "Oversold condition",
+                "Overbought condition",
+                "Neutral market"
+              ],
+              correct: 2
+            }
+          }
+        ]
+      },
+      {
+        id: "module-3",
+        title: "Risk Management",
+        level: "Intermediate",
+        lessons: [
+          {
+            id: "lesson-3-1",
+            title: "Position Sizing",
+            duration: "18 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Calculating Proper Position Size</h3>
+              
+              <p class="mb-4 font-semibold text-red-400">Risk management is MORE important than your trading strategy!</p>
+
+              <h4 class="text-lg font-semibold mb-2">The 1-2% Rule:</h4>
+              <div class="bg-red-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <p class="mb-2"><strong>Never risk more than 1-2% of your account on a single trade.</strong></p>
+                <p class="text-sm">This ensures you can survive 50+ losing trades before depleting your account.</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Position Size Formula:</h4>
+              <div class="bg-blue-900 bg-opacity-20 p-4 rounded mb-4 font-mono text-sm">
+                Position Size = (Account Balance × Risk %) ÷ (Stop Loss in Pips × Pip Value)
+              </div>
+
+              <div class="bg-green-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">💡 Example:</h4>
+                <p class="mb-2">Account: $10,000 | Risk: 1% ($100) | Stop Loss: 50 pips</p>
+                <p class="mb-2">For EUR/USD (pip value = $10 per standard lot):</p>
+                <p class="font-mono">$100 ÷ (50 pips × $10) = 0.2 lots or 20,000 units</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Key Principles:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li><strong>Fixed Risk:</strong> Always risk the same % regardless of confidence</li>
+                <li><strong>Wider Stop = Smaller Position:</strong> Adjust size based on stop distance</li>
+                <li><strong>Account for Spread:</strong> Factor in spread costs</li>
+                <li><strong>Leverage Wisely:</strong> Lower leverage = lower risk</li>
+              </ul>
+
+              <h4 class="text-lg font-semibold mb-2">Leverage Guidelines:</h4>
+              <div class="space-y-2">
+                <p>🟢 <strong>Beginners:</strong> 1:10 or 1:20 maximum</p>
+                <p>🟡 <strong>Intermediate:</strong> 1:30 to 1:50</p>
+                <p>🔴 <strong>Advanced:</strong> Up to 1:100 (with strict discipline)</p>
+              </div>
+
+              <p class="mt-4 text-sm italic">Higher leverage amplifies both gains AND losses. Most retail traders blow accounts from over-leveraging.</p>
+            `,
+            quiz: {
+              question: "What is the maximum recommended risk per trade?",
+              options: ["5-10%", "1-2%", "10-15%", "3-5%"],
+              correct: 1
+            }
+          },
+          {
+            id: "lesson-3-2",
+            title: "Stop Loss & Take Profit",
+            duration: "16 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Setting Stop Loss and Take Profit Levels</h3>
+              
+              <h4 class="text-lg font-semibold mb-2">Stop Loss (SL):</h4>
+              <div class="bg-red-900 bg-opacity-20 p-4 rounded mb-4">
+                <p class="mb-2">Pre-determined exit point to limit losses on a trade.</p>
+                <p class="font-semibold text-red-400">NEVER trade without a stop loss!</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Where to Place Stop Loss:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li><strong>Below Support (Long):</strong> Give it breathing room (10-20 pips buffer)</li>
+                <li><strong>Above Resistance (Short):</strong> Allow for false breakouts</li>
+                <li><strong>Beyond Swing Points:</strong> Previous high/low plus buffer</li>
+                <li><strong>ATR-Based:</strong> Use Average True Range (1.5-2× ATR)</li>
+                <li><strong>NOT arbitrary numbers:</strong> Base on market structure, not round numbers</li>
+              </ul>
+
+              <h4 class="text-lg font-semibold mb-2">Take Profit (TP):</h4>
+              <div class="bg-green-900 bg-opacity-20 p-4 rounded mb-4">
+                <p>Pre-determined exit point to lock in profits.</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Where to Place Take Profit:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li><strong>At Resistance (Long):</strong> Where selling pressure appears</li>
+                <li><strong>At Support (Short):</strong> Where buying pressure appears</li>
+                <li><strong>Fibonacci Levels:</strong> 61.8%, 100%, 161.8% extensions</li>
+                <li><strong>Previous Swing Points:</strong> Historical highs/lows</li>
+                <li><strong>Risk:Reward Ratio:</strong> Minimum 1:2 (if risking 50 pips, target 100 pips)</li>
+              </ul>
+
+              <div class="bg-yellow-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">📊 Risk:Reward Ratios:</h4>
+                <p class="mb-2"><strong>1:1</strong> - Need 50% win rate to break even</p>
+                <p class="mb-2"><strong>1:2</strong> - Need 33% win rate to profit (Recommended minimum)</p>
+                <p><strong>1:3</strong> - Need 25% win rate to profit (Professional level)</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Advanced Techniques:</h4>
+              <ul class="list-disc pl-6 space-y-2">
+                <li><strong>Trailing Stop:</strong> Move SL to break-even after price moves in your favor</li>
+                <li><strong>Partial Profit Taking:</strong> Close 50% at 1:1, let rest run to 1:3</li>
+                <li><strong>Break-Even Stop:</strong> Move SL to entry price after reaching 1:1</li>
+              </ul>
+            `,
+            quiz: {
+              question: "What is the recommended minimum risk:reward ratio?",
+              options: ["1:1", "1:2", "1:3", "2:1"],
+              correct: 1
+            }
+          },
+          {
+            id: "lesson-3-3",
+            title: "Risk:Reward Ratios",
+            duration: "14 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Understanding Risk:Reward Ratios</h3>
+              
+              <p class="mb-4">The risk:reward ratio compares potential loss to potential gain on each trade.</p>
+
+              <div class="bg-blue-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">💡 Formula:</h4>
+                <p class="font-mono">Risk:Reward = (Entry - Stop Loss) : (Take Profit - Entry)</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Practical Example:</h4>
+              <div class="bg-green-900 bg-opacity-20 p-4 rounded mb-4">
+                <p class="mb-2"><strong>Buy EUR/USD at 1.1000</strong></p>
+                <p class="mb-2">Stop Loss: 1.0950 (50 pips risk)</p>
+                <p class="mb-2">Take Profit: 1.1100 (100 pips reward)</p>
+                <p class="font-semibold">Risk:Reward = 1:2 ✓</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Why It Matters:</h4>
+              <div class="space-y-3 mb-4">
+                <div class="bg-gray-700 p-3 rounded">
+                  <p class="mb-1"><strong>50% Win Rate + 1:2 R:R =</strong></p>
+                  <p class="text-sm">5 wins × $200 = $1,000 profit</p>
+                  <p class="text-sm">5 losses × $100 = $500 loss</p>
+                  <p class="text-green-400 font-semibold">Net: +$500</p>
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Required Win Rates:</h4>
+              <div class="space-y-2 mb-4">
+                <p>1:1 ratio → Need 50% wins to break even</p>
+                <p>1:2 ratio → Need 33% wins to break even</p>
+                <p>1:3 ratio → Need 25% wins to break even</p>
+              </div>
+
+              <div class="bg-yellow-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">⚡ Pro Strategy:</h4>
+                <p class="mb-2">Never take trades with less than 1:2 risk:reward.</p>
+                <p>A 40% win rate with 1:3 R:R is more profitable than 60% win rate with 1:1 R:R!</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Common Mistakes:</h4>
+              <ul class="list-disc pl-6 space-y-2">
+                <li>❌ Moving take profit closer when in profit (greed)</li>
+                <li>❌ Moving stop loss further when in loss (hope)</li>
+                <li>❌ Taking 1:1 trades because they "feel safe"</li>
+                <li>✅ Stick to your plan regardless of emotions</li>
+              </ul>
+            `,
+            quiz: {
+              question: "With a 1:3 risk:reward ratio, what win rate do you need to be profitable?",
+              options: ["50%", "40%", "Over 25%", "Over 60%"],
+              correct: 2
+            }
+          }
+        ]
+      },
+      {
+        id: "module-4",
+        title: "Trading Psychology",
+        level: "Advanced",
+        lessons: [
+          {
+            id: "lesson-4-1",
+            title: "Emotional Control",
+            duration: "20 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Mastering Your Trading Emotions</h3>
+              
+              <p class="mb-4 font-semibold">95% of traders fail not because of bad strategy, but poor psychology.</p>
+
+              <h4 class="text-lg font-semibold mb-2">The Four Trading Demons:</h4>
+              
+              <div class="space-y-3 mb-4">
+                <div class="bg-red-900 bg-opacity-20 p-4 rounded">
+                  <h5 class="font-semibold mb-2">😱 Fear</h5>
+                  <p class="mb-2">Symptoms: Hesitation, missing setups, closing winners too early</p>
+                  <p class="text-sm"><strong>Cure:</strong> Start with micro lots. Build confidence with small wins. Trust your strategy.</p>
+                </div>
+
+                <div class="bg-orange-900 bg-opacity-20 p-4 rounded">
+                  <h5 class="font-semibold mb-2">😤 Greed</h5>
+                  <p class="mb-2">Symptoms: Over-trading, moving take profits further, risking too much</p>
+                  <p class="text-sm"><strong>Cure:</strong> Stick to your plan. Remember that slow, consistent growth beats occasional big wins.</p>
+                </div>
+
+                <div class="bg-blue-900 bg-opacity-20 p-4 rounded">
+                  <h5 class="font-semibold mb-2">🙏 Hope</h5>
+                  <p class="mb-2">Symptoms: Holding losers, moving stop losses, "it will come back"</p>
+                  <p class="text-sm"><strong>Cure:</strong> Set stop loss and NEVER move it wider. Accept losses as part of the game.</p>
+                </div>
+
+                <div class="bg-purple-900 bg-opacity-20 p-4 rounded">
+                  <h5 class="font-semibold mb-2">😠 Revenge Trading</h5>
+                  <p class="mb-2">Symptoms: Trading right after a loss, doubling position size, abandoning strategy</p>
+                  <p class="text-sm"><strong>Cure:</strong> Take a break after losses. Walk away. Come back with a clear mind.</p>
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Mental Framework Rules:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li>Think in probabilities, not certainties (no single trade matters)</li>
+                <li>Focus on process, not profits (good process = profits over time)</li>
+                <li>Accept losses as business expenses (part of the edge)</li>
+                <li>Detach from outcomes (emotional neutrality is power)</li>
+              </ul>
+
+              <div class="bg-green-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">🧠 Psychological Edge:</h4>
+                <p class="mb-2">Professional traders don't have better strategies. They have better discipline.</p>
+                <p class="text-sm italic">"The goal is not to be right. The goal is to make money." - Mark Douglas</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Pre-Trade Checklist:</h4>
+              <ol class="list-decimal pl-6 space-y-1">
+                <li>Am I calm and focused?</li>
+                <li>Does this meet my strategy criteria?</li>
+                <li>Have I calculated position size correctly?</li>
+                <li>Is my stop loss set and LOCKED?</li>
+                <li>Am I okay with losing this trade?</li>
+              </ol>
+
+              <p class="mt-4 text-sm">If you answer "no" to any question, don't take the trade.</p>
+            `,
+            quiz: {
+              question: "What is the main reason most traders fail?",
+              options: [
+                "Lack of capital",
+                "Poor strategy",
+                "Poor psychology and discipline",
+                "Market manipulation"
+              ],
+              correct: 2
+            }
+          },
+          {
+            id: "lesson-4-2",
+            title: "Trading Discipline",
+            duration: "18 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Building Unbreakable Discipline</h3>
+              
+              <p class="mb-4">Discipline separates profitable traders from the 95% who fail.</p>
+
+              <h4 class="text-lg font-semibold mb-2">The Trading Plan:</h4>
+              <div class="bg-blue-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <p class="mb-2"><strong>Your trading plan is your bible. Never deviate.</strong></p>
+                <p class="text-sm">A good plan followed consistently beats a perfect plan followed randomly.</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Essential Plan Components:</h4>
+              <ol class="list-decimal pl-6 mb-4 space-y-2">
+                <li><strong>Trading Hours:</strong> When you'll trade (session alignment)</li>
+                <li><strong>Instruments:</strong> Which pairs (max 3-5 to start)</li>
+                <li><strong>Strategy:</strong> Exact entry/exit rules</li>
+                <li><strong>Risk Management:</strong> Max risk per trade, daily loss limit</li>
+                <li><strong>Position Sizing:</strong> Formula and calculator</li>
+                <li><strong>Record Keeping:</strong> Trade journal mandatory</li>
+              </ol>
+
+              <h4 class="text-lg font-semibold mb-2">Daily Discipline Rules:</h4>
+              <div class="space-y-3 mb-4">
+                <div class="bg-green-900 bg-opacity-20 p-3 rounded">
+                  <strong>✅ DO:</strong> Follow your plan exactly, journal every trade, review weekly
+                </div>
+                <div class="bg-red-900 bg-opacity-20 p-3 rounded">
+                  <strong>❌ DON'T:</strong> Trade on "feelings", chase trades, revenge trade
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">The Daily Loss Limit:</h4>
+              <div class="bg-yellow-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">⚠️ Critical Rule:</h4>
+                <p class="mb-2"><strong>Stop trading for the day after losing 3% of your account.</strong></p>
+                <p class="text-sm">This prevents emotional spirals and protects capital. No exceptions.</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Trade Journal Benefits:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li>Identifies patterns in your behavior</li>
+                <li>Shows which setups work best for YOU</li>
+                <li>Reveals emotional triggers</li>
+                <li>Provides data for strategy refinement</li>
+                <li>Builds accountability</li>
+              </ul>
+
+              <h4 class="text-lg font-semibold mb-2">What to Journal:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-1">
+                <li>Date, time, pair, direction</li>
+                <li>Entry/exit prices, SL/TP</li>
+                <li>Position size and risk</li>
+                <li>Setup/reason for trade</li>
+                <li>Emotional state before/during/after</li>
+                <li>Mistakes made</li>
+                <li>Lessons learned</li>
+              </ul>
+
+              <div class="bg-purple-900 bg-opacity-20 p-4 rounded">
+                <p class="text-sm italic">"In the short run, the market is a voting machine. In the long run, it's a weighing machine. Discipline is what gets you to the long run."</p>
+              </div>
+            `,
+            quiz: {
+              question: "What should you do after losing 3% of your account in a day?",
+              options: [
+                "Double your position size to recover",
+                "Stop trading for the day",
+                "Switch to a different strategy",
+                "Keep trading with smaller positions"
+              ],
+              correct: 1
+            }
+          },
+          {
+            id: "lesson-4-3",
+            title: "Developing Your Edge",
+            duration: "16 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Finding Your Trading Edge</h3>
+              
+              <p class="mb-4">Your "edge" is what gives you a probabilistic advantage over time.</p>
+
+              <h4 class="text-lg font-semibold mb-2">What Is an Edge?</h4>
+              <div class="bg-blue-900 bg-opacity-20 p-4 rounded mb-4">
+                <p class="mb-2">An edge is a repeatable strategy that wins more than it loses over many trades.</p>
+                <p class="text-sm"><strong>Key:</strong> It doesn't need to win every time, just MORE than it loses.</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Components of an Edge:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li><strong>Statistical Advantage:</strong> Positive expectancy over 100+ trades</li>
+                <li><strong>Consistency:</strong> Same rules applied every time</li>
+                <li><strong>Risk Management:</strong> Protecting capital is part of the edge</li>
+                <li><strong>Psychological Mastery:</strong> Ability to execute without emotion</li>
+              </ul>
+
+              <h4 class="text-lg font-semibold mb-2">Common Edge Types:</h4>
+              <div class="space-y-3 mb-4">
+                <div class="bg-green-900 bg-opacity-20 p-3 rounded">
+                  <strong>📊 Technical Edge:</strong> Chart patterns, indicators, price action
+                </div>
+                <div class="bg-purple-900 bg-opacity-20 p-3 rounded">
+                  <strong>⏰ Time-Based Edge:</strong> Trading specific sessions or days
+                </div>
+                <div class="bg-orange-900 bg-opacity-20 p-3 rounded">
+                  <strong>📰 Fundamental Edge:</strong> Economic data, interest rates, sentiment
+                </div>
+                <div class="bg-red-900 bg-opacity-20 p-3 rounded">
+                  <strong>🎯 Psychological Edge:</strong> Patience, discipline, emotional control
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Developing Your Edge:</h4>
+              <ol class="list-decimal pl-6 mb-4 space-y-2">
+                <li><strong>Backtest:</strong> Test strategy on historical data (min. 100 trades)</li>
+                <li><strong>Forward Test:</strong> Trade on demo for 3+ months</li>
+                <li><strong>Analyze:</strong> Calculate win rate, average R:R, expectancy</li>
+                <li><strong>Refine:</strong> Adjust based on data, not emotions</li>
+                <li><strong>Scale:</strong> Go live with small size, gradually increase</li>
+              </ol>
+
+              <div class="bg-yellow-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">📈 Expectancy Formula:</h4>
+                <p class="font-mono text-sm mb-2">(Win % × Avg Win) - (Loss % × Avg Loss)</p>
+                <p class="text-sm">Positive expectancy = Long-term profitable edge</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Example Edge Calculation:</h4>
+              <div class="bg-gray-700 p-4 rounded">
+                <p class="mb-1">Win Rate: 40% (40 wins out of 100 trades)</p>
+                <p class="mb-1">Average Win: $200</p>
+                <p class="mb-1">Average Loss: $100</p>
+                <p class="mb-3 font-mono text-sm">(0.40 × $200) - (0.60 × $100) = $80 - $60 = $20</p>
+                <p class="text-green-400 font-semibold">Expected profit: $20 per trade ✓</p>
+              </div>
+
+              <p class="mt-4 text-sm italic">Remember: Most "holy grail" systems are scams. Real edges are simple, boring, and require discipline to execute.</p>
+            `,
+            quiz: {
+              question: "What defines a trading edge?",
+              options: [
+                "Winning every single trade",
+                "A repeatable strategy with positive expectancy",
+                "Using the most complex indicators",
+                "Following expert predictions"
+              ],
+              correct: 1
+            }
+          }
+        ]
+      },
+      {
+        id: "module-5",
+        title: "Professional Strategies",
+        level: "Advanced",
+        lessons: [
+          {
+            id: "lesson-5-1",
+            title: "Price Action Trading",
+            duration: "25 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Pure Price Action Strategy</h3>
+              
+              <p class="mb-4">Price action is trading based solely on price movement without indicators.</p>
+
+              <h4 class="text-lg font-semibold mb-2">Why Price Action?</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li>Indicators lag; price action is real-time</li>
+                <li>Works on all timeframes and instruments</li>
+                <li>Institutional traders use it</li>
+                <li>Clean charts = clearer decisions</li>
+              </ul>
+
+              <h4 class="text-lg font-semibold mb-2">Key Price Action Concepts:</h4>
+              
+              <div class="space-y-3 mb-4">
+                <div class="bg-blue-900 bg-opacity-20 p-4 rounded">
+                  <strong>���� Market Structure:</strong>
+                  <p class="text-sm mt-2">Higher Highs + Higher Lows = Uptrend</p>
+                  <p class="text-sm">Lower Highs + Lower Lows = Downtrend</p>
+                  <p class="text-sm">Break of structure (BOS) = Trend change</p>
+                </div>
+
+                <div class="bg-green-900 bg-opacity-20 p-4 rounded">
+                  <strong>🎯 Supply & Demand Zones:</strong>
+                  <p class="text-sm mt-2">Areas where price reversed sharply (institutions buying/selling)</p>
+                  <p class="text-sm">Look for clean moves away from the zone</p>
+                  <p class="text-sm">First touch is strongest</p>
+                </div>
+
+                <div class="bg-purple-900 bg-opacity-20 p-4 rounded">
+                  <strong>🕯️ Candlestick Patterns:</strong>
+                  <p class="text-sm mt-2">Pin bars, engulfing patterns at key levels</p>
+                  <p class="text-sm">Longer wicks = stronger rejection</p>
+                  <p class="text-sm">Must align with overall trend</p>
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Price Action Entry Strategy:</h4>
+              <ol class="list-decimal pl-6 mb-4 space-y-2">
+                <li><strong>Identify Trend:</strong> What's the higher timeframe bias?</li>
+                <li><strong>Mark Key Levels:</strong> Support/resistance, S&D zones</li>
+                <li><strong>Wait for Pullback:</strong> Price retraces to key level</li>
+                <li><strong>Confirmation:</strong> Rejection candle forms (pin bar, engulfing)</li>
+                <li><strong>Entry:</strong> Enter on break of confirmation candle</li>
+                <li><strong>Stop Loss:</strong> Beyond the rejection wick</li>
+                <li><strong>Take Profit:</strong> Next key level or 2:1 R:R minimum</li>
+              </ol>
+
+              <div class="bg-yellow-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">💡 Example Trade:</h4>
+                <p class="text-sm mb-1">1. EUR/USD in uptrend on daily chart</p>
+                <p class="text-sm mb-1">2. Price pulls back to previous resistance (now support) at 1.0950</p>
+                <p class="text-sm mb-1">3. Bullish pin bar forms at 1.0950 with long lower wick</p>
+                <p class="text-sm mb-1">4. Enter long at 1.0960 (above pin bar high)</p>
+                <p class="text-sm mb-1">5. Stop loss at 1.0920 (below wick) = 40 pips</p>
+                <p class="text-sm">6. Take profit at 1.1040 (next resistance) = 80 pips (1:2 R:R)</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Multi-Timeframe Analysis:</h4>
+              <ul class="list-disc pl-6 space-y-2">
+                <li><strong>Higher TF (Daily/4H):</strong> Identify overall trend and key levels</li>
+                <li><strong>Entry TF (1H/15M):</strong> Find precise entry with confirmation</li>
+                <li><strong>Rule:</strong> Only trade in direction of higher timeframe trend</li>
+              </ul>
+
+              <p class="mt-4 text-sm italic">Mastering price action takes time. Start by studying 100+ examples of pin bars and engulfing patterns at key levels.</p>
+            `,
+            quiz: {
+              question: "What is the main advantage of price action trading?",
+              options: [
+                "It uses the most indicators",
+                "It's based on real-time price movement without lag",
+                "It requires complex mathematical calculations",
+                "It only works on one timeframe"
+              ],
+              correct: 1
+            }
+          },
+          {
+            id: "lesson-5-2",
+            title: "Breakout Trading",
+            duration: "22 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Breakout Trading Strategy</h3>
+              
+              <p class="mb-4">Breakouts occur when price moves beyond defined support/resistance with momentum.</p>
+
+              <h4 class="text-lg font-semibold mb-2">Types of Breakouts:</h4>
+              <div class="space-y-3 mb-4">
+                <div class="bg-green-900 bg-opacity-20 p-4 rounded">
+                  <strong>📈 Support/Resistance Breakout:</strong>
+                  <p class="text-sm mt-2">Price breaks through established horizontal level</p>
+                  <p class="text-sm">Best with multiple touches confirming the level</p>
+                </div>
+
+                <div class="bg-blue-900 bg-opacity-20 p-4 rounded">
+                  <strong>📊 Trendline Breakout:</strong>
+                  <p class="text-sm mt-2">Price breaks diagonal trendline</p>
+                  <p class="text-sm">Often signals trend reversal</p>
+                </div>
+
+                <div class="bg-purple-900 bg-opacity-20 p-4 rounded">
+                  <strong>🔺 Triangle/Wedge Breakout:</strong>
+                  <p class="text-sm mt-2">Price breaks out of consolidation pattern</p>
+                  <p class="text-sm">Tight consolidation = explosive move</p>
+                </div>
+
+                <div class="bg-orange-900 bg-opacity-20 p-4 rounded">
+                  <strong>🎯 Range Breakout:</strong>
+                  <p class="text-sm mt-2">Price breaks sideways range (box)</p>
+                  <p class="text-sm">Measure range height for profit target</p>
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Breakout Entry Strategy:</h4>
+              <ol class="list-decimal pl-6 mb-4 space-y-2">
+                <li><strong>Identify the Pattern:</strong> Clear consolidation or level</li>
+                <li><strong>Confirm the Level:</strong> Multiple touches increase reliability</li>
+                <li><strong>Wait for Break:</strong> Decisive close beyond level (not just wick)</li>
+                <li><strong>Volume Check:</strong> Increased volume confirms strength</li>
+                <li><strong>Entry:</strong> Enter on retest of broken level OR immediate break</li>
+                <li><strong>Stop Loss:</strong> Inside the range/pattern</li>
+                <li><strong>Target:</strong> Measure pattern height, project from breakout</li>
+              </ol>
+
+              <div class="bg-red-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">⚠️ False Breakout Warning:</h4>
+                <p class="mb-2">60-70% of breakouts fail! Protect yourself:</p>
+                <ul class="list-disc pl-6 space-y-1 text-sm">
+                  <li>Wait for candle close beyond level</li>
+                  <li>Look for volume increase</li>
+                  <li>Consider retest entry (safer but may miss move)</li>
+                  <li>Set tight stop loss inside the range</li>
+                </ul>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Retest Entry (Conservative):</h4>
+              <div class="bg-green-900 bg-opacity-20 p-4 rounded mb-4">
+                <ol class="list-decimal pl-6 text-sm space-y-1">
+                  <li>Price breaks resistance at 1.1000</li>
+                  <li>Wait for pullback to 1.1000 (now support)</li>
+                  <li>Look for rejection/confirmation</li>
+                  <li>Enter long when price bounces up</li>
+                  <li>Stop below retest low</li>
+                </ol>
+                <p class="mt-2 text-xs italic">Safer but misses 30-40% of breakouts that don't retest</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Immediate Entry (Aggressive):</h4>
+              <div class="bg-orange-900 bg-opacity-20 p-4 rounded mb-4">
+                <ol class="list-decimal pl-6 text-sm space-y-1">
+                  <li>Price breaks resistance at 1.1000</li>
+                  <li>Enter immediately on break</li>
+                  <li>Stop below breakout candle low</li>
+                  <li>Wider stop but catches strong moves</li>
+                </ol>
+                <p class="mt-2 text-xs italic">Higher risk but doesn't miss non-retest breakouts</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Best Breakout Conditions:</h4>
+              <ul class="list-disc pl-6 space-y-1">
+                <li>Multiple timeframe confirmation</li>
+                <li>Aligns with major trend</li>
+                <li>Major economic event catalyst</li>
+                <li>Tight consolidation before break</li>
+                <li>Clear level with multiple touches</li>
+              </ul>
+            `,
+            quiz: {
+              question: "What is the safest way to enter a breakout trade?",
+              options: [
+                "Enter immediately when level breaks",
+                "Enter during the consolidation phase",
+                "Wait for a retest of the broken level",
+                "Enter after the move is complete"
+              ],
+              correct: 2
+            }
+          },
+          {
+            id: "lesson-5-3",
+            title: "Trend Following",
+            duration: "20 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Trend Following Strategy</h3>
+              
+              <p class="mb-4 font-semibold">"The trend is your friend until it ends."</p>
+
+              <h4 class="text-lg font-semibold mb-2">Core Principle:</h4>
+              <div class="bg-blue-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <p>Identify strong trends and ride them by entering on pullbacks. Let winners run.</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Identifying Strong Trends:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li><strong>Moving Average Slope:</strong> 20/50/200 MA all aligned in same direction</li>
+                <li><strong>Price Structure:</strong> Clear HH+HL (uptrend) or LH+LL (downtrend)</li>
+                <li><strong>Strong Momentum:</strong> Large candles in trend direction</li>
+                <li><strong>Minimal Retracements:</strong> Shallow pullbacks (not deep corrections)</li>
+              </ul>
+
+              <h4 class="text-lg font-semibold mb-2">Entry Techniques:</h4>
+              
+              <div class="space-y-3 mb-4">
+                <div class="bg-green-900 bg-opacity-20 p-4 rounded">
+                  <strong>1. Pullback to Moving Average:</strong>
+                  <p class="text-sm mt-2">Wait for price to retrace to 20 or 50 EMA</p>
+                  <p class="text-sm">Enter when price bounces off MA with confirmation</p>
+                  <p class="text-sm">Stop below MA or swing low</p>
+                </div>
+
+                <div class="bg-blue-900 bg-opacity-20 p-4 rounded">
+                  <strong>2. Fibonacci Retracement:</strong>
+                  <p class="text-sm mt-2">Draw Fib from swing low to swing high</p>
+                  <p class="text-sm">Enter at 38.2%, 50%, or 61.8% retracement</p>
+                  <p class="text-sm">Look for confluence with other support</p>
+                </div>
+
+                <div class="bg-purple-900 bg-opacity-20 p-4 rounded">
+                  <strong>3. Trendline Bounce:</strong>
+                  <p class="text-sm mt-2">Draw trendline connecting swing lows (uptrend)</p>
+                  <p class="text-sm">Enter when price touches trendline</p>
+                  <p class="text-sm">Stop slightly below trendline</p>
+                </div>
+
+                <div class="bg-orange-900 bg-opacity-20 p-4 rounded">
+                  <strong>4. Flag/Pennant Breakout:</strong>
+                  <p class="text-sm mt-2">Wait for consolidation after strong move</p>
+                  <p class="text-sm">Enter when price breaks consolidation in trend direction</p>
+                  <p class="text-sm">Target: Length of flagpole</p>
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Trade Management:</h4>
+              <ol class="list-decimal pl-6 mb-4 space-y-2">
+                <li><strong>Initial Stop:</strong> Below recent swing low (uptrend)</li>
+                <li><strong>Move to Break-even:</strong> When up 1R, move stop to entry</li>
+                <li><strong>Trailing Stop:</strong> Move stop below each new swing low</li>
+                <li><strong>Let it Run:</strong> Don't cap profits - trail until stopped out</li>
+              </ol>
+
+              <div class="bg-yellow-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">💡 Example Trade:</h4>
+                <p class="text-sm mb-1">1. EUR/USD in strong uptrend (HH+HL confirmed)</p>
+                <p class="text-sm mb-1">2. Price pulls back to 50 EMA at 1.0950</p>
+                <p class="text-sm mb-1">3. Bullish pin bar forms at EMA</p>
+                <p class="text-sm mb-1">4. Enter long at 1.0960</p>
+                <p class="text-sm mb-1">5. Initial stop at 1.0920 (below swing low)</p>
+                <p class="text-sm mb-1">6. Move to break-even at 1.1000</p>
+                <p class="text-sm">7. Trail stop below each swing low, exit when stopped</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">When to Exit:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li>Trend structure breaks (failed to make new high/low)</li>
+                <li>Price closes below 200 MA (long-term trend change)</li>
+                <li>Strong reversal pattern at resistance</li>
+                <li>Trailing stop hit</li>
+              </ul>
+
+              <h4 class="text-lg font-semibold mb-2">Best Pairs for Trend Following:</h4>
+              <ul class="list-disc pl-6 space-y-1">
+                <li>EUR/USD, GBP/USD (clear trends, high liquidity)</li>
+                <li>AUD/USD, NZD/USD (commodity-driven trends)</li>
+                <li>USD/JPY (risk-on/risk-off trends)</li>
+              </ul>
+
+              <p class="mt-4 text-sm italic">Patience is key. Wait for clear setups. One good trend trade can outperform 10 range trades.</p>
+            `,
+            quiz: {
+              question: "What is the best time to enter a trend following trade?",
+              options: [
+                "At the very beginning of the trend",
+                "During a pullback to support/MA",
+                "When the trend is ending",
+                "Only after the trend breaks"
+              ],
+              correct: 1
+            }
+          },
+          {
+            id: "lesson-5-4",
+            title: "News Trading",
+            duration: "18 min",
+            content: `
+              <h3 class="text-xl font-semibold mb-4">Trading Economic News Events</h3>
+              
+              <p class="mb-4">High-impact news creates volatility and opportunity but also significant risk.</p>
+
+              <div class="bg-red-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">⚠️ Warning:</h4>
+                <p>News trading is advanced and risky. Spreads widen, slippage occurs, and stops may not fill at desired prices.</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">High-Impact News Events:</h4>
+              <div class="space-y-3 mb-4">
+                <div class="bg-blue-900 bg-opacity-20 p-4 rounded">
+                  <strong>🏦 Interest Rate Decisions</strong>
+                  <p class="text-sm mt-2">Biggest impact. Central bank rate changes affect currency value directly.</p>
+                  <p class="text-sm">Higher rates → Stronger currency | Lower rates → Weaker currency</p>
+                </div>
+
+                <div class="bg-green-900 bg-opacity-20 p-4 rounded">
+                  <strong>💼 Non-Farm Payrolls (NFP)</strong>
+                  <p class="text-sm mt-2">US employment data. Released first Friday of month.</p>
+                  <p class="text-sm">Can move USD pairs 100+ pips in minutes</p>
+                </div>
+
+                <div class="bg-purple-900 bg-opacity-20 p-4 rounded">
+                  <strong>📈 GDP Reports</strong>
+                  <p class="text-sm mt-2">Measures economic growth. Strong GDP = strong currency</p>
+                </div>
+
+                <div class="bg-orange-900 bg-opacity-20 p-4 rounded">
+                  <strong>📊 Inflation Data (CPI)</strong>
+                  <p class="text-sm mt-2">High inflation may trigger rate hikes (bullish currency)</p>
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">Three News Trading Approaches:</h4>
+              
+              <div class="space-y-3 mb-4">
+                <div class="bg-gray-700 p-4 rounded">
+                  <strong>1. Avoid Completely (Safest):</strong>
+                  <p class="text-sm mt-2">Close all positions 30 min before major news</p>
+                  <p class="text-sm">Wait 30 min after for volatility to settle</p>
+                  <p class="text-sm">✓ Best for beginners and most traders</p>
+                </div>
+
+                <div class="bg-gray-700 p-4 rounded">
+                  <strong>2. Wait for Direction (Conservative):</strong>
+                  <p class="text-sm mt-2">Let news release and initial spike occur</p>
+                  <p class="text-sm">Wait for clear direction to emerge (15-30 min)</p>
+                  <p class="text-sm">Enter in direction of breakout with tight stop</p>
+                </div>
+
+                <div class="bg-gray-700 p-4 rounded">
+                  <strong>3. Straddle Strategy (Aggressive):</strong>
+                  <p class="text-sm mt-2">Place buy stop above range and sell stop below</p>
+                  <p class="text-sm">One order fills, cancel other immediately</p>
+                  <p class="text-sm">⚠️ Risk: Whipsaw both ways (lose twice)</p>
+                </div>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">News Trading Rules:</h4>
+              <ol class="list-decimal pl-6 mb-4 space-y-2">
+                <li><strong>Know the Schedule:</strong> Use Forex Factory or similar calendar</li>
+                <li><strong>Understand Expectations:</strong> Reaction depends on actual vs forecast</li>
+                <li><strong>Reduce Position Size:</strong> Half your normal risk during news</li>
+                <li><strong>Wider Stops:</strong> Account for increased volatility</li>
+                <li><strong>Fast Execution:</strong> Use market orders, not pending (may not fill)</li>
+              </ol>
+
+              <div class="bg-yellow-900 bg-opacity-30 p-4 rounded-lg mb-4">
+                <h4 class="font-semibold mb-2">������ Pro Tip:</h4>
+                <p class="mb-2"><strong>"Buy the rumor, sell the fact"</strong></p>
+                <p class="text-sm">Markets often move BEFORE news (anticipation) and reverse AFTER news (profit taking)</p>
+              </div>
+
+              <h4 class="text-lg font-semibold mb-2">News vs Technical Analysis:</h4>
+              <ul class="list-disc pl-6 mb-4 space-y-2">
+                <li><strong>Short Term:</strong> News dominates (minutes to hours)</li>
+                <li><strong>Medium Term:</strong> Technical levels reassert (hours to days)</li>
+                <li><strong>Long Term:</strong> Fundamentals drive trends (weeks to months)</li>
+              </ul>
+
+              <h4 class="text-lg font-semibold mb-2">What to Track:</h4>
+              <ul class="list-disc pl-6 space-y-1">
+                <li>Central bank meetings and speeches</li>
+                <li>Employment data (NFP, unemployment)</li>
+                <li>Inflation reports (CPI, PPI)</li>
+                <li>GDP releases</li>
+                <li>Retail sales, manufacturing PMI</li>
+              </ul>
+
+              <p class="mt-4 text-sm italic">Recommendation: Most traders should avoid active news trading. Instead, be aware of news times and avoid trading 30 min before/after major releases.</p>
+            `,
+            quiz: {
+              question: "What is the safest approach to news trading for most traders?",
+              options: [
+                "Trade immediately when news is released",
+                "Use maximum leverage during news",
+                "Avoid trading 30 min before and after major news",
+                "Only trade during news events"
+              ],
+              correct: 2
+            }
+          }
+        ]
+      }
+    ];
+
+    const dataHandler = {
+      onDataChanged(data) {
+        currentProgress = data || [];
+        renderApp();
+      }
+    };
+
+    async function onConfigChange(config) {
+      const customFont = config.font_family || defaultConfig.font_family;
+      const fontSize = config.font_size || defaultConfig.font_size;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondaryColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+
+      document.body.style.backgroundColor = bgColor;
+      document.body.style.color = textColor;
+      document.body.style.fontFamily = `${customFont}, system-ui, -apple-system, sans-serif`;
+      document.body.style.fontSize = `${fontSize}px`;
+
+      const allText = document.querySelectorAll('body, body *');
+      allText.forEach(el => {
+        if (!el.style.fontFamily) {
+          el.style.fontFamily = `${customFont}, system-ui, -apple-system, sans-serif`;
+        }
+      });
+
+      const titles = document.querySelectorAll('h1');
+      titles.forEach(el => el.style.fontSize = `${fontSize * 2}px`);
+
+      const subtitles = document.querySelectorAll('h2');
+      subtitles.forEach(el => el.style.fontSize = `${fontSize * 1.5}px`);
+
+      const headings = document.querySelectorAll('h3');
+      headings.forEach(el => el.style.fontSize = `${fontSize * 1.25}px`);
+
+      const subheadings = document.querySelectorAll('h4');
+      subheadings.forEach(el => el.style.fontSize = `${fontSize * 1.1}px`);
+
+      const surfaces = document.querySelectorAll('[data-surface]');
+      surfaces.forEach(el => el.style.backgroundColor = surfaceColor);
+
+      const primaryButtons = document.querySelectorAll('[data-primary-btn]');
+      primaryButtons.forEach(el => {
+        el.style.backgroundColor = primaryColor;
+        el.style.borderColor = primaryColor;
+      });
+
+      const secondaryButtons = document.querySelectorAll('[data-secondary-btn]');
+      secondaryButtons.forEach(el => {
+        el.style.backgroundColor = secondaryColor;
+        el.style.borderColor = secondaryColor;
+      });
+
+      const allElements = document.querySelectorAll('*');
+      allElements.forEach(el => {
+        if (el.style.color && el.style.color === defaultConfig.text_color) {
+          el.style.color = textColor;
+        }
+      });
+
+      renderApp();
+    }
+
+    function getLessonProgress(moduleId, lessonId) {
+      return currentProgress.find(p => p.module_id === moduleId && p.lesson_id === lessonId);
+    }
+
+    function getModuleProgress(moduleId) {
+      const lessons = modules.find(m => m.id === moduleId)?.lessons || [];
+      const completed = lessons.filter(l => getLessonProgress(moduleId, l.id)?.completed).length;
+      return { completed, total: lessons.length, percentage: (completed / lessons.length) * 100 };
+    }
+
+    function getTotalProgress() {
+      const allLessons = modules.reduce((acc, m) => acc + m.modules.length, 0);
+      const completedLessons = currentProgress.filter(p => p.completed).length;
+      return { completed: completedLessons, total: allLessons, percentage: (completedLessons / allLessons) * 100 };
+    }
+
+    async function markLessonComplete(moduleId, lessonId, quizScore) {
+      const existing = currentProgress.find(p => p.module_id === moduleId && p.lesson_id === lessonId);
+      
+      if (existing) {
+        const updatedProgress = {
+          ...existing,
+          completed: true,
+          quiz_score: quizScore,
+          completed_at: new Date().toISOString()
+        };
+        const result = await window.dataSdk.update(updatedProgress);
+        if (!result.isOk) {
+          showNotification('Failed to update progress. Please try again.', 'error');
+        }
+      } else {
+        const newProgress = {
+          module_id: moduleId,
+          lesson_id: lessonId,
+          completed: true,
+          quiz_score: quizScore,
+          completed_at: new Date().toISOString()
+        };
+        
+        if (currentProgress.length >= 999) {
+          showNotification('Progress limit reached (999 records). Cannot save more progress.', 'error');
+          return;
+        }
+        
+        const result = await window.dataSdk.create(newProgress);
+        if (!result.isOk) {
+          showNotification('Failed to save progress. Please try again.', 'error');
+        }
+      }
+    }
+
+    function showNotification(message, type = 'success') {
+      const notification = document.createElement('div');
+      notification.className = `notification fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white`;
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      setTimeout(() => {
+        notification.style.animation = 'slideIn 0.3s ease reverse';
+        setTimeout(() => notification.remove(), 300);
+      }, 2700);
+    }
+
+    function renderNavigation() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+
+      const navItems = [
+        { id: 'home', label: 'Home', icon: '🏠' },
+        { id: 'modules', label: 'Courses', icon: '��' },
+        { id: 'tools', label: 'Tools', icon: '🛠️' },
+        { id: 'resources', label: 'Resources', icon: '��' },
+        { id: 'about', label: 'About', icon: 'ℹ️' },
+        { id: 'contact', label: 'Contact', icon: '📧' }
+      ];
+
+      return `
+        <nav class="sticky top-0 z-50 shadow-lg glow" data-surface style="background-color: ${surfaceColor}; border-bottom: 2px solid #FFD700;">
+          <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-lg text-shadow-gold">G.W FX</span>
+              </div>
+              <div class="flex gap-1">
+                ${navItems.map(item => `
+                  <button onclick="navigateTo('${item.id}')"
+                          class="px-4 py-2 rounded-lg transition-all font-medium ${currentView === item.id || (currentView === 'lessons' && item.id === 'modules') || (currentView === 'lesson' && item.id === 'modules') ? 'font-bold' : ''}"
+                          style="color: ${currentView === item.id || (currentView === 'lessons' && item.id === 'modules') || (currentView === 'lesson' && item.id === 'modules') ? primaryColor : textColor}; background-color: ${currentView === item.id || (currentView === 'lessons' && item.id === 'modules') || (currentView === 'lesson' && item.id === 'modules') ? primaryColor + '20' : 'transparent'};">
+                    ${item.label}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        </nav>
+        
+        <!-- Live Forex Ticker -->
+        <div class="overflow-hidden py-3" style="background-color: ${surfaceColor}; border-bottom: 1px solid ${primaryColor}40;">
+          <div id="forex-ticker" class="whitespace-nowrap">
+            <div class="flex gap-8 ticker-scroll">
+              <div class="flex items-center gap-3 px-4 py-2 rounded">
+                <span class="font-bold text-sm">Loading...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderHomeView() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const title = config.course_title || defaultConfig.course_title;
+      const welcomeMsg = config.welcome_message || defaultConfig.welcome_message;
+
+      const totalLessons = modules.reduce((acc, m) => acc + m.lessons.length, 0);
+      const completedLessons = currentProgress.filter(p => p.completed).length;
+      const progressPercentage = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+
+      return `
+        <div class="min-h-full" style="background-color: ${bgColor}; color: ${textColor};">
+          ${renderNavigation()}
+          
+          <div class="max-w-7xl mx-auto px-4 py-12">
+            <!-- Hero Section -->
+            <div class="text-center mb-16">
+              <h1 class="text-5xl font-bold mb-6">${title}</h1>
+              <p class="text-2xl opacity-90 mb-8">${welcomeMsg}</p>
+              <button onclick="navigateTo('modules')"
+                      class="btn-hover px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105"
+                      data-primary-btn
+                      style="background-color: ${primaryColor}; color: white;">
+                Start Learning →
+              </button>
+            </div>
+
+            <!-- Progress Overview -->
+            ${completedLessons > 0 ? `
+              <div class="mb-12 p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <h3 class="text-xl font-bold mb-4">Your Progress</h3>
+                <div class="flex justify-between text-sm mb-2">
+                  <span>${completedLessons} of ${totalLessons} lessons completed</span>
+                  <span>${Math.round(progressPercentage)}%</span>
+                </div>
+                <div class="w-full h-3 rounded-full" style="background-color: ${bgColor};">
+                  <div class="progress-bar-fill h-full rounded-full transition-all duration-300" 
+                       style="width: ${progressPercentage}%; background-color: ${primaryColor};"></div>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Features Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 fade-in">
+              <div class="p-6 rounded-xl text-center" data-surface style="background-color: ${surfaceColor};">
+                <div class="text-4xl mb-4">📚</div>
+                <h3 class="text-xl font-bold mb-2">5 Modules</h3>
+                <p class="opacity-80">Structured learning from beginner to advanced</p>
+              </div>
+              <div class="p-6 rounded-xl text-center" data-surface style="background-color: ${surfaceColor};">
+                <div class="text-4xl mb-4">🎯</div>
+                <h3 class="text-xl font-bold mb-2">16 Lessons</h3>
+                <p class="opacity-80">Practical examples and real strategies</p>
+              </div>
+              <div class="p-6 rounded-xl text-center" data-surface style="background-color: ${surfaceColor};">
+                <div class="text-4xl mb-4">✅</div>
+                <h3 class="text-xl font-bold mb-2">Track Progress</h3>
+                <p class="opacity-80">Your progress is saved automatically</p>
+              </div>
+            </div>
+
+            <!-- Course Modules Preview -->
+            <h2 class="text-3xl font-bold mb-6">What You'll Learn</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              ${modules.map((module, idx) => `
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <div class="flex items-start gap-4">
+                    <div class="text-3xl">${['💱', '📊', '🛡️', '🧠', '🚀'][idx]}</div>
+                    <div class="flex-1">
+                      <div class="text-sm opacity-70 mb-1">Module ${idx + 1}</div>
+                      <h3 class="text-xl font-bold mb-2">${module.title}</h3>
+                      <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3"
+                            style="background-color: ${primaryColor}20; color: ${primaryColor};">
+                        ${module.level}
+                      </span>
+                      <p class="text-sm opacity-80">${module.lessons.length} lessons</p>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderModulesView() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+
+      return `
+        <div class="min-h-full" style="background-color: ${bgColor}; color: ${textColor};">
+          ${renderNavigation()}
+          <div class="max-w-6xl mx-auto px-4 py-8">
+            <header class="text-center mb-12">
+              <h1 class="text-4xl font-bold mb-4">Course Modules</h1>
+              <p class="text-xl opacity-90">Choose a module to begin your learning journey</p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              ${modules.map((module, idx) => {
+                const progress = getModuleProgress(module.id);
+                return `
+                  <div class="module-header cursor-pointer p-6 rounded-xl" 
+                       data-surface
+                       style="background-color: ${surfaceColor};"
+                       onclick="selectModule('${module.id}')">
+                    <div class="flex justify-between items-start mb-4">
+                      <div>
+                        <div class="text-sm opacity-70 mb-1">Module ${idx + 1}</div>
+                        <h3 class="text-xl font-bold mb-2">${module.title}</h3>
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold"
+                              style="background-color: ${primaryColor}20; color: ${primaryColor};">
+                          ${module.level}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="mb-4">
+                      <div class="flex justify-between text-sm mb-2">
+                        <span>${progress.completed} of ${progress.total} lessons</span>
+                        <span>${Math.round(progress.percentage)}%</span>
+                      </div>
+                      <div class="w-full h-2 rounded-full" style="background-color: ${bgColor};">
+                        <div class="h-full rounded-full transition-all duration-300" 
+                             style="width: ${progress.percentage}%; background-color: ${primaryColor};"></div>
+                      </div>
+                    </div>
+
+                    <div class="text-sm opacity-70">
+                      ${module.lessons.length} lessons • ${module.lessons.reduce((sum, l) => {
+                        const match = l.duration.match(/\d+/);
+                        return sum + (match ? parseInt(match[0]) : 0);
+                      }, 0)} min
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderToolsView() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+
+      return `
+        <div class="min-h-full" style="background-color: ${bgColor}; color: ${textColor};">
+          ${renderNavigation()}
+          <div class="max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+            <h1 class="text-3xl sm:text-4xl font-bold mb-6 sm:mb-8">Trading Tools</h1>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+              <!-- Position Size Calculator -->
+              <div class="p-4 sm:p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <h3 class="text-lg sm:text-xl font-bold mb-3 sm:mb-4">💰 Position Size Calculator</h3>
+                <div class="space-y-3 sm:space-y-4">
+                  <div>
+                    <label class="block text-xs sm:text-sm mb-2">Account Balance ($)</label>
+                    <input type="number" id="accountBalance" placeholder="10000" 
+                           class="w-full px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base rounded-lg"
+                           style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                  </div>
+                  <div>
+                    <label class="block text-xs sm:text-sm mb-2">Risk Percentage (%)</label>
+                    <input type="number" id="riskPercent" placeholder="1" step="0.1"
+                           class="w-full px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base rounded-lg"
+                           style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                  </div>
+                  <div>
+                    <label class="block text-xs sm:text-sm mb-2">Stop Loss (pips)</label>
+                    <input type="number" id="stopLoss" placeholder="50"
+                           class="w-full px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base rounded-lg"
+                           style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                  </div>
+                  <button onclick="calculatePositionSize()"
+                          class="w-full py-2.5 sm:py-3 rounded-lg font-semibold text-sm sm:text-base"
+                          data-primary-btn
+                          style="background-color: ${primaryColor}; color: white;">
+                    Calculate
+                  </button>
+                  <div id="positionResult" class="text-center font-bold text-sm sm:text-base" style="color: ${primaryColor};"></div>
+                </div>
+              </div>
+
+              <!-- Risk:Reward Calculator -->
+              <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <h3 class="text-xl font-bold mb-4">📊 Risk:Reward Calculator</h3>
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm mb-2">Entry Price</label>
+                    <input type="number" id="entryPrice" placeholder="1.1000" step="0.0001"
+                           class="w-full px-4 py-2 rounded-lg"
+                           style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                  </div>
+                  <div>
+                    <label class="block text-sm mb-2">Stop Loss Price</label>
+                    <input type="number" id="slPrice" placeholder="1.0950" step="0.0001"
+                           class="w-full px-4 py-2 rounded-lg"
+                           style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                  </div>
+                  <div>
+                    <label class="block text-sm mb-2">Take Profit Price</label>
+                    <input type="number" id="tpPrice" placeholder="1.1100" step="0.0001"
+                           class="w-full px-4 py-2 rounded-lg"
+                           style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                  </div>
+                  <button onclick="calculateRiskReward()"
+                          class="w-full py-3 rounded-lg font-semibold"
+                          data-primary-btn
+                          style="background-color: ${primaryColor}; color: white;">
+                    Calculate
+                  </button>
+                  <div id="rrResult" class="text-center font-bold text-lg" style="color: ${primaryColor};"></div>
+                </div>
+              </div>
+
+              <!-- Pip Value Calculator -->
+              <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <h3 class="text-xl font-bold mb-4">📏 Pip Value Calculator</h3>
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm mb-2">Lot Size</label>
+                    <select id="lotSize" class="w-full px-4 py-2 rounded-lg"
+                            style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                      <option value="1">Standard (1.0)</option>
+                      <option value="0.1">Mini (0.1)</option>
+                      <option value="0.01">Micro (0.01)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm mb-2">Currency Pair</label>
+                    <select id="currencyPair" class="w-full px-4 py-2 rounded-lg"
+                            style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                      <option value="10">EUR/USD, GBP/USD, AUD/USD ($10/pip)</option>
+                      <option value="9.5">USD/CHF (~$9.50/pip)</option>
+                      <option value="9">USD/JPY (~$9/pip)</option>
+                      <option value="13">USD/CAD (~$7.50/pip)</option>
+                    </select>
+                  </div>
+                  <button onclick="calculatePipValue()"
+                          class="w-full py-3 rounded-lg font-semibold"
+                          data-primary-btn
+                          style="background-color: ${primaryColor}; color: white;">
+                    Calculate
+                  </button>
+                  <div id="pipResult" class="text-center font-bold text-lg" style="color: ${primaryColor};"></div>
+                </div>
+              </div>
+
+              <!-- Profit Calculator -->
+              <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <h3 class="text-xl font-bold mb-4">💵 Profit/Loss Calculator</h3>
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm mb-2">Position Size (lots)</label>
+                    <input type="number" id="profitLotSize" placeholder="0.1" step="0.01"
+                           class="w-full px-4 py-2 rounded-lg"
+                           style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                  </div>
+                  <div>
+                    <label class="block text-sm mb-2">Pips Gained/Lost</label>
+                    <input type="number" id="pipsMove" placeholder="50"
+                           class="w-full px-4 py-2 rounded-lg"
+                           style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                  </div>
+                  <div>
+                    <label class="block text-sm mb-2">Pip Value ($)</label>
+                    <input type="number" id="pipValueInput" placeholder="10" step="0.1"
+                           class="w-full px-4 py-2 rounded-lg"
+                           style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                  </div>
+                  <button onclick="calculateProfit()"
+                          class="w-full py-3 rounded-lg font-semibold"
+                          data-primary-btn
+                          style="background-color: ${primaryColor}; color: white;">
+                    Calculate
+                  </button>
+                  <div id="profitResult" class="text-center font-bold text-lg" style="color: ${primaryColor};"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAboutView() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+
+      return `
+        <div class="min-h-full" style="background-color: ${bgColor}; color: ${textColor};">
+          ${renderNavigation()}
+          <div class="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+            <h1 class="text-3xl sm:text-4xl font-bold mb-6 sm:mb-8">About Forex Trading Academy</h1>
+
+            <div class="space-y-4 sm:space-y-6">
+              <div class="p-4 sm:p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <h3 class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">Our Mission</h3>
+                <p class="opacity-90 leading-relaxed text-sm sm:text-base">
+                  We believe that anyone can learn to trade Forex successfully with proper education, discipline, and risk management. 
+                  Our mission is to provide comprehensive, practical, and accessible trading education that takes you from complete 
+                  beginner to confident trader.
+                </p>
+              </div>
+
+              <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <h3 class="text-2xl font-bold mb-4">What Makes Us Different</h3>
+                <div class="space-y-3">
+                  <div class="flex items-start gap-3">
+                    <span class="text-2xl">✅</span>
+                    <div>
+                      <h4 class="font-bold mb-1">Structured Learning Path</h4>
+                      <p class="opacity-80">Progressive curriculum from fundamentals to advanced strategies</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3">
+                    <span class="text-2xl">✅</span>
+                    <div>
+                      <h4 class="font-bold mb-1">Practical Examples</h4>
+                      <p class="opacity-80">Real-world scenarios and actionable strategies</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3">
+                    <span class="text-2xl">✅</span>
+                    <div>
+                      <h4 class="font-bold mb-1">Focus on Psychology</h4>
+                      <p class="opacity-80">We teach the mental game that most courses ignore</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3">
+                    <span class="text-2xl">✅</span>
+                    <div>
+                      <h4 class="font-bold mb-1">Risk Management First</h4>
+                      <p class="opacity-80">Protecting capital is prioritized over chasing profits</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <h3 class="text-2xl font-bold mb-4">Course Statistics</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div class="text-center">
+                    <div class="text-3xl font-bold" style="color: ${primaryColor};">5</div>
+                    <div class="text-sm opacity-80">Modules</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-3xl font-bold" style="color: ${primaryColor};">16</div>
+                    <div class="text-sm opacity-80">Lessons</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-3xl font-bold" style="color: ${primaryColor};">4+</div>
+                    <div class="text-sm opacity-80">Hours</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-3xl font-bold" style="color: ${primaryColor};">16</div>
+                    <div class="text-sm opacity-80">Quizzes</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <h3 class="text-2xl font-bold mb-4">⚠️ Important Disclaimer</h3>
+                <p class="opacity-90 leading-relaxed">
+                  Trading foreign exchange (Forex) carries a high level of risk and may not be suitable for all investors. 
+                  Past performance is not indicative of future results. This course is for educational purposes only and 
+                  should not be considered financial advice. Always conduct your own research and consider seeking advice 
+                  from an independent financial advisor before making any investment decisions.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderContactView() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+
+      return `
+        <div class="min-h-full" style="background-color: ${bgColor}; color: ${textColor};">
+          ${renderNavigation()}
+          <div class="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+            <h1 class="text-3xl sm:text-4xl font-bold mb-6 sm:mb-8">Contact Us</h1>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+              <div class="p-4 sm:p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <div class="text-2xl sm:text-3xl mb-3 sm:mb-4">📧</div>
+                <h3 class="text-lg sm:text-xl font-bold mb-2">Email</h3>
+                <p class="opacity-80 text-sm sm:text-base">support@forexacademy.com</p>
+              </div>
+
+              <div class="p-4 sm:p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <div class="text-2xl sm:text-3xl mb-3 sm:mb-4">💬</div>
+                <h3 class="text-lg sm:text-xl font-bold mb-2">Live Chat</h3>
+                <p class="opacity-80 text-sm sm:text-base">Available Mon-Fri, 9am-5pm EST</p>
+              </div>
+
+              <div class="p-4 sm:p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <div class="text-2xl sm:text-3xl mb-3 sm:mb-4">🌐</div>
+                <h3 class="text-lg sm:text-xl font-bold mb-2">Community Forum</h3>
+                <p class="opacity-80 text-sm sm:text-base">Connect with fellow traders</p>
+              </div>
+
+              <div class="p-4 sm:p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                <div class="text-2xl sm:text-3xl mb-3 sm:mb-4">📱</div>
+                <h3 class="text-lg sm:text-xl font-bold mb-2">Social Media</h3>
+                <p class="opacity-80 text-sm sm:text-base">Follow us for daily tips</p>
+              </div>
+            </div>
+
+            <div class="p-4 sm:p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+              <h3 class="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Send Us a Message</h3>
+              <form onsubmit="handleContactSubmit(event)" class="space-y-3 sm:space-y-4">
+                <div>
+                  <label for="contactName" class="block text-xs sm:text-sm mb-2">Name</label>
+                  <input type="text" id="contactName" required
+                         class="w-full px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base rounded-lg"
+                         style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                </div>
+                <div>
+                  <label for="contactEmail" class="block text-xs sm:text-sm mb-2">Email</label>
+                  <input type="email" id="contactEmail" required
+                         class="w-full px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base rounded-lg"
+                         style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                </div>
+                <div>
+                  <label for="contactSubject" class="block text-xs sm:text-sm mb-2">Subject</label>
+                  <input type="text" id="contactSubject" required
+                         class="w-full px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base rounded-lg"
+                         style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};">
+                </div>
+                <div>
+                  <label for="contactMessage" class="block text-xs sm:text-sm mb-2">Message</label>
+                  <textarea id="contactMessage" rows="5" required
+                            class="w-full px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base rounded-lg"
+                            style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${primaryColor};"></textarea>
+                </div>
+                <button type="submit"
+                        class="w-full py-2.5 sm:py-3 rounded-lg font-semibold text-sm sm:text-base"
+                        data-primary-btn
+                        style="background-color: ${primaryColor}; color: white;">
+                  Send Message
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderResourcesView() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+
+      return `
+        <div class="min-h-full" style="background-color: ${bgColor}; color: ${textColor};">
+          ${renderNavigation()}
+          <div class="max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+            <h1 class="text-3xl sm:text-4xl font-bold mb-6 sm:mb-8">Trading Resources</h1>
+
+            <!-- Economic Calendars -->
+            <div class="mb-8">
+              <h2 class="text-2xl font-bold mb-4">📅 Economic Calendars</h2>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">Forex Factory</h3>
+                  <p class="opacity-80 mb-4 text-sm">Most popular economic calendar with real-time news and forums</p>
+                  <a href="https://www.forexfactory.com/calendar" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">Investing.com</h3>
+                  <p class="opacity-80 mb-4 text-sm">Comprehensive calendar with filters and historical data</p>
+                  <a href="https://www.investing.com/economic-calendar/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">DailyFX</h3>
+                  <p class="opacity-80 mb-4 text-sm">Calendar with expert analysis and market impact ratings</p>
+                  <a href="https://www.dailyfx.com/economic-calendar" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">FXStreet</h3>
+                  <p class="opacity-80 mb-4 text-sm">Live calendar with forecasts and detailed event descriptions</p>
+                  <a href="https://www.fxstreet.com/economic-calendar" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chart Platforms -->
+            <div class="mb-8">
+              <h2 class="text-2xl font-bold mb-4">📊 Chart Platforms</h2>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">TradingView</h3>
+                  <p class="opacity-80 mb-4 text-sm">Best charting platform with social features and indicators</p>
+                  <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Downlaod →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">MetaTrader 4/5</h3>
+                  <p class="opacity-80 mb-4 text-sm">Industry standard trading platforms with advanced tools</p>
+                  <a href="https://www.metatrader4.com/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Downlaod →
+                  </a>
+                </div>
+              </div>
+            </div>
+
+
+
+	 <!-- Brokers Platforms -->
+            <div class="mb-8">
+              <h2 class="text-2xl font-bold mb-4"> Brokers</h2>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">Exness</h3>
+                  <p class="opacity-80 mb-4 text-sm">Best </p>
+                  <a href="https://one.exnessonelink.com/a/d3syzbti5v/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Download →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">Headway</h3>
+                  <p class="opacity-80 mb-4 text-sm">Industry standard trading platforms with advanced tools</p>
+                  <a href="https://www.metatrader4.com/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Download →
+                  </a>
+                </div>
+              </div>
+            </div>
+
+
+            <!-- Market News -->
+            <div class="mb-8">
+              <h2 class="text-2xl font-bold mb-4">📰 Market News & Analysis</h2>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">Bloomberg</h3>
+                  <p class="opacity-80 mb-4 text-sm">Professional financial news and analysis</p>
+                  <a href="https://www.bloomberg.com/markets/currencies" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">Reuters</h3>
+                  <p class="opacity-80 mb-4 text-sm">Global breaking news and market updates</p>
+                  <a href="https://www.reuters.com/markets/currencies/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">CNBC</h3>
+                  <p class="opacity-80 mb-4 text-sm">Real-time business news and market data</p>
+                  <a href="https://www.cnbc.com/currencies/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Educational Resources -->
+            <div class="mb-8">
+              <h2 class="text-2xl font-bold mb-4">📚 Additional Learning</h2>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">BabyPips School</h3>
+                  <p class="opacity-80 mb-4 text-sm">Free comprehensive Forex education for beginners</p>
+                  <a href="https://www.babypips.com/learn/forex" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">Investopedia</h3>
+                  <p class="opacity-80 mb-4 text-sm">Financial dictionary and trading tutorials</p>
+                  <a href="https://www.investopedia.com/forex-trading-4427668" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Books -->
+            <div class="mb-8">
+              <h2 class="text-2xl font-bold mb-4">📖 Recommended Books</h2>
+              <div class="p-6 rounded-xl space-y-4" data-surface style="background-color: ${surfaceColor};">
+                <div class="border-l-4 pl-4" style="border-color: ${primaryColor};">
+                  <h4 class="font-bold text-lg mb-1">"Trading in the Zone" by Mark Douglas</h4>
+                  <p class="text-sm opacity-80">Master the psychology of trading and develop the winner's mindset</p>
+                </div>
+                <div class="border-l-4 pl-4" style="border-color: ${primaryColor};">
+                  <h4 class="font-bold text-lg mb-1">"Market Wizards" by Jack D. Schwager</h4>
+                  <p class="text-sm opacity-80">Interviews with top traders revealing their strategies and philosophies</p>
+                </div>
+                <div class="border-l-4 pl-4" style="border-color: ${primaryColor};">
+                  <h4 class="font-bold text-lg mb-1">"Japanese Candlestick Charting Techniques" by Steve Nison</h4>
+                  <p class="text-sm opacity-80">The definitive guide to candlestick patterns and analysis</p>
+                </div>
+                <div class="border-l-4 pl-4" style="border-color: ${primaryColor};">
+                  <h4 class="font-bold text-lg mb-1">"Technical Analysis of the Financial Markets" by John J. Murphy</h4>
+                  <p class="text-sm opacity-80">Comprehensive guide to technical analysis methods and strategies</p>
+                </div>
+                <div class="border-l-4 pl-4" style="border-color: ${primaryColor};">
+                  <h4 class="font-bold text-lg mb-1">"A Beginner's Guide to Forex Trading" by Matthew Driver</h4>
+                  <p class="text-sm opacity-80">Clear introduction to Forex fundamentals and practical trading</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tools & Utilities -->
+            <div class="mb-8">
+              <h2 class="text-2xl font-bold mb-4">�����️ Trading Tools</h2>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">MyFxBook</h3>
+                  <p class="opacity-80 mb-4 text-sm">Track and analyze your trading performance automatically</p>
+                  <a href="https://www.myfxbook.com/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+                  <h3 class="text-xl font-bold mb-2">Forex Tester</h3>
+                  <p class="opacity-80 mb-4 text-sm">Backtesting software to test strategies on historical data</p>
+                  <a href="https://www.forextester.com/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Visit Site →
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Communities -->
+            <div>
+              <h2 class="text-2xl font-bold mb-4">👥 Trading Communities</h2>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="p-6 rounded-xl text-center" data-surface style="background-color: ${surfaceColor};">
+                  <div class="text-3xl mb-3">💬</div>
+                  <h3 class="text-lg font-bold mb-2">Reddit r/Forex</h3>
+                  <p class="text-sm opacity-80 mb-4">Active community discussions</p>
+                  <a href="https://www.reddit.com/r/Forex/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Join →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl text-center" data-surface style="background-color: ${surfaceColor};">
+                  <div class="text-3xl mb-3">🗨️</div>
+                  <h3 class="text-lg font-bold mb-2">Forex Factory Forums</h3>
+                  <p class="text-sm opacity-80 mb-4">Established trading forums</p>
+                  <a href="https://www.forexfactory.com/forum" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Join →
+                  </a>
+                </div>
+
+                <div class="p-6 rounded-xl text-center" data-surface style="background-color: ${surfaceColor};">
+                  <div class="text-3xl mb-3">💼</div>
+                  <h3 class="text-lg font-bold mb-2">TradingView Chat</h3>
+                  <p class="text-sm opacity-80 mb-4">Real-time trader discussions</p>
+                  <a href="https://www.tradingview.com/chat/" target="_blank" rel="noopener noreferrer"
+                     class="inline-block px-4 py-2 rounded-lg font-semibold text-sm"
+                     data-primary-btn
+                     style="background-color: ${primaryColor}; color: white;">
+                    Join →
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLessonsView() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondaryColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+
+      const module = modules.find(m => m.id === selectedModule);
+      if (!module) return '';
+
+      const progress = getModuleProgress(module.id);
+
+      return `
+        <div class="min-h-full" style="background-color: ${bgColor}; color: ${textColor};">
+          ${renderNavigation()}
+          <div class="max-w-4xl mx-auto px-4 py-8">
+            <button onclick="currentView='modules'; selectedModule=null; renderApp();"
+                    class="mb-6 px-4 py-2 rounded-lg transition-all"
+                    data-secondary-btn
+                    style="background-color: ${secondaryColor}; color: white;">
+              ← Back to Modules
+            </button>
+
+            <div class="mb-8">
+              <h1 class="text-3xl font-bold mb-2">${module.title}</h1>
+              <div class="flex items-center gap-4 text-sm opacity-70">
+                <span class="px-3 py-1 rounded-full" style="background-color: ${primaryColor}20; color: ${primaryColor};">
+                  ${module.level}
+                </span>
+                <span>${module.lessons.length} lessons</span>
+              </div>
+              <div class="mt-4">
+                <div class="flex justify-between text-sm mb-2">
+                  <span>Module Progress</span>
+                  <span>${Math.round(progress.percentage)}%</span>
+                </div>
+                <div class="w-full h-2 rounded-full" style="background-color: ${surfaceColor};">
+                  <div class="h-full rounded-full" style="width: ${progress.percentage}%; background-color: ${primaryColor};"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              ${module.lessons.map((lesson, idx) => {
+                const lessonProgress = getLessonProgress(module.id, lesson.id);
+                const isComplete = lessonProgress?.completed;
+                return `
+                  <div class="lesson-card p-6 rounded-xl cursor-pointer"
+                       data-surface
+                       style="background-color: ${surfaceColor};"
+                       onclick="selectLesson('${lesson.id}')">
+                    <div class="flex items-start justify-between">
+                      <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                          <span class="text-sm font-semibold opacity-70">Lesson ${idx + 1}</span>
+                          ${isComplete ? `
+                            <span class="text-xs px-2 py-1 rounded-full" style="background-color: ${primaryColor}20; color: ${primaryColor};">
+                              ��� Completed
+                            </span>
+                          ` : ''}
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">${lesson.title}</h3>
+                        <div class="text-sm opacity-70">⏱️ ${lesson.duration}</div>
+                      </div>
+                      <div class="text-2xl">
+                        ${isComplete ? '✓' : '→'}
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLessonView() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondaryColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+
+      const module = modules.find(m => m.id === selectedModule);
+      const lesson = module?.lessons.find(l => l.id === selectedLesson);
+      if (!lesson) return '';
+
+      const lessonProgress = getLessonProgress(module.id, lesson.id);
+      const isComplete = lessonProgress?.completed;
+
+      return `
+        <div class="min-h-full" style="background-color: ${bgColor}; color: ${textColor};">
+          <div class="max-w-4xl mx-auto px-4 py-8">
+            <button onclick="currentView='lessons'; selectedLesson=null; quizAnswers={}; renderApp();"
+                    class="mb-6 px-4 py-2 rounded-lg transition-all"
+                    data-secondary-btn
+                    style="background-color: ${secondaryColor}; color: white;">
+              ← Back to Lessons
+            </button>
+
+            <div class="mb-8 p-6 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+              <h1 class="text-3xl font-bold mb-4">${lesson.title}</h1>
+              <div class="flex items-center gap-4 text-sm opacity-70">
+                <span>⏱️ ${lesson.duration}</span>
+                ${isComplete ? `<span class="px-3 py-1 rounded-full" style="background-color: ${primaryColor}20; color: ${primaryColor};">✓ Completed</span>` : ''}
+              </div>
+            </div>
+
+            <div class="mb-8 p-8 rounded-xl prose prose-invert max-w-none" 
+                 data-surface 
+                 style="background-color: ${surfaceColor}; color: ${textColor};">
+              ${lesson.content}
+            </div>
+
+            <div class="p-8 rounded-xl" data-surface style="background-color: ${surfaceColor};">
+              <h3 class="text-xl font-bold mb-6">📝 Quick Quiz</h3>
+              <p class="mb-4 font-semibold">${lesson.quiz.question}</p>
+              <div class="space-y-3 mb-6">
+                ${lesson.quiz.options.map((option, idx) => `
+                  <label class="quiz-option flex items-center gap-3 p-4 rounded-lg cursor-pointer border-2"
+                         style="border-color: ${quizAnswers[lesson.id] === idx ? primaryColor : 'transparent'}; background-color: ${bgColor};">
+                    <input type="radio" 
+                           name="quiz-${lesson.id}" 
+                           value="${idx}"
+                           ${quizAnswers[lesson.id] === idx ? 'checked' : ''}
+                           onchange="quizAnswers['${lesson.id}'] = ${idx}; renderApp();"
+                           class="w-5 h-5">
+                    <span>${option}</span>
+                  </label>
+                `).join('')}
+              </div>
+              <button onclick="submitQuiz('${module.id}', '${lesson.id}', ${lesson.quiz.correct})"
+                      class="w-full py-3 rounded-lg font-semibold transition-all"
+                      data-primary-btn
+                      style="background-color: ${primaryColor}; color: white;"
+                      ${quizAnswers[lesson.id] === undefined ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                Complete Lesson
+              </button>
+            </div>
+
+            ${(() => {
+              const currentLessonIndex = module.lessons.findIndex(l => l.id === lesson.id);
+              const nextLesson = module.lessons[currentLessonIndex + 1];
+              const prevLesson = module.lessons[currentLessonIndex - 1];
+              
+              return `
+                <div class="flex gap-4 mt-6">
+                  ${prevLesson ? `
+                    <button onclick="selectLesson('${prevLesson.id}')"
+                            class="flex-1 py-3 rounded-lg font-semibold transition-all"
+                            data-secondary-btn
+                            style="background-color: ${secondaryColor}; color: white;">
+                      ← Previous Lesson
+                    </button>
+                  ` : '<div class="flex-1"></div>'}
+                  
+                  ${nextLesson ? `
+                    <button onclick="selectLesson('${nextLesson.id}')"
+                            class="flex-1 py-3 rounded-lg font-semibold transition-all"
+                            data-primary-btn
+                            style="background-color: ${primaryColor}; color: white;">
+                      Next Lesson →
+                    </button>
+                  ` : `
+                    <button onclick="currentView='modules'; selectedModule=null; selectedLesson=null; renderApp();"
+                            class="flex-1 py-3 rounded-lg font-semibold transition-all"
+                            data-primary-btn
+                            style="background-color: ${primaryColor}; color: white;">
+                      Complete Module ✓
+                    </button>
+                  `}
+                </div>
+              `;
+            })()}
+          </div>
+        </div>
+      `;
+    }
+
+    async function submitQuiz(moduleId, lessonId, correctAnswer) {
+      const userAnswer = quizAnswers[lessonId];
+      if (userAnswer === undefined) return;
+
+      const isCorrect = userAnswer === correctAnswer;
+      const score = isCorrect ? 100 : 0;
+
+      const submitBtn = event.target;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving progress...';
+
+      await markLessonComplete(moduleId, lessonId, score);
+
+      showNotification(isCorrect ? '🎉 Correct! Lesson completed.' : '��� Lesson completed. Review the material to master it.');
+      
+      setTimeout(() => {
+        currentView = 'lessons';
+        selectedLesson = null;
+        quizAnswers = {};
+        renderApp();
+      }, 1500);
+    }
+
+    function selectModule(moduleId) {
+      selectedModule = moduleId;
+      currentView = 'lessons';
+      renderApp();
+    }
+
+    function selectLesson(lessonId) {
+      selectedLesson = lessonId;
+      currentView = 'lesson';
+      renderApp();
+    }
+
+    function navigateTo(view) {
+      currentView = view;
+      if (view !== 'modules' && view !== 'lessons' && view !== 'lesson') {
+        selectedModule = null;
+        selectedLesson = null;
+      }
+      renderApp();
+    }
+
+    function calculatePositionSize() {
+      const balance = parseFloat(document.getElementById('accountBalance').value);
+      const riskPercent = parseFloat(document.getElementById('riskPercent').value);
+      const stopLoss = parseFloat(document.getElementById('stopLoss').value);
+      const resultEl = document.getElementById('positionResult');
+
+      if (!balance || !riskPercent || !stopLoss) {
+        resultEl.textContent = 'Please fill all fields';
+        resultEl.className = 'text-center font-bold text-sm sm:text-base';
+        return;
+      }
+
+      const riskAmount = balance * (riskPercent / 100);
+      const pipValue = 10; // Standard lot for major pairs
+      const lotSize = riskAmount / (stopLoss * pipValue);
+
+      resultEl.className = 'calculator-result text-center font-bold text-sm sm:text-base';
+      resultEl.textContent = 
+        `Position Size: ${lotSize.toFixed(2)} lots (${(lotSize * 100000).toFixed(0)} units)`;
+    }
+
+    function calculateRiskReward() {
+      const entry = parseFloat(document.getElementById('entryPrice').value);
+      const sl = parseFloat(document.getElementById('slPrice').value);
+      const tp = parseFloat(document.getElementById('tpPrice').value);
+      const resultEl = document.getElementById('rrResult');
+
+      if (!entry || !sl || !tp) {
+        resultEl.textContent = 'Please fill all fields';
+        resultEl.className = 'text-center font-bold text-lg';
+        return;
+      }
+
+      const risk = Math.abs(entry - sl);
+      const reward = Math.abs(tp - entry);
+      const ratio = reward / risk;
+
+      resultEl.className = 'calculator-result text-center font-bold text-lg';
+      resultEl.textContent = 
+        `Risk:Reward = 1:${ratio.toFixed(2)} | Risk: ${(risk * 10000).toFixed(0)} pips | Reward: ${(reward * 10000).toFixed(0)} pips`;
+    }
+
+    function calculatePipValue() {
+      const lotSize = parseFloat(document.getElementById('lotSize').value);
+      const basePipValue = parseFloat(document.getElementById('currencyPair').value);
+      const resultEl = document.getElementById('pipResult');
+
+      const pipValue = lotSize * basePipValue;
+
+      resultEl.className = 'calculator-result text-center font-bold text-lg';
+      resultEl.textContent = 
+        `Pip Value: $${pipValue.toFixed(2)} per pip`;
+    }
+
+    function calculateProfit() {
+      const lotSize = parseFloat(document.getElementById('profitLotSize').value);
+      const pips = parseFloat(document.getElementById('pipsMove').value);
+      const pipValue = parseFloat(document.getElementById('pipValueInput').value);
+      const resultEl = document.getElementById('profitResult');
+
+      if (!lotSize || !pips || !pipValue) {
+        resultEl.textContent = 'Please fill all fields';
+        resultEl.className = 'text-center font-bold text-lg';
+        return;
+      }
+
+      const profit = lotSize * pips * pipValue;
+      const sign = profit >= 0 ? '+' : '';
+
+      resultEl.className = 'calculator-result text-center font-bold text-lg';
+      resultEl.textContent = 
+        `${sign}$${profit.toFixed(2)}`;
+    }
+
+    function handleContactSubmit(event) {
+      event.preventDefault();
+      showNotification('Thank you! Your message has been received. We\'ll respond within 24 hours.');
+      event.target.reset();
+    }
+
+    function handleDonation() {
+      // Create PayPal donation form and submit it
+      const form = document.createElement('form');
+      form.action = 'https://www.paypal.com/donate';
+      form.method = 'post';
+      form.target = '_blank';
+      
+      // PayPal business email
+      const businessInput = document.createElement('input');
+      businessInput.type = 'hidden';
+      businessInput.name = 'business';
+      businessInput.value = 'thebillioncoinmichael@gmail.com';
+      form.appendChild(businessInput);
+      
+      // Donation amount
+      const amountInput = document.createElement('input');
+      amountInput.type = 'hidden';
+      amountInput.name = 'amount';
+      amountInput.value = '1.00';
+      form.appendChild(amountInput);
+      
+      // Currency code
+      const currencyInput = document.createElement('input');
+      currencyInput.type = 'hidden';
+      currencyInput.name = 'currency_code';
+      currencyInput.value = 'USD';
+      form.appendChild(currencyInput);
+      
+      // Item name
+      const itemNameInput = document.createElement('input');
+      itemNameInput.type = 'hidden';
+      itemNameInput.name = 'item_name';
+      itemNameInput.value = 'Support Free Forex Education';
+      form.appendChild(itemNameInput);
+      
+      // No shipping required
+      const noShippingInput = document.createElement('input');
+      noShippingInput.type = 'hidden';
+      noShippingInput.name = 'no_shipping';
+      noShippingInput.value = '1';
+      form.appendChild(noShippingInput);
+      
+      // Command (donation)
+      const cmdInput = document.createElement('input');
+      cmdInput.type = 'hidden';
+      cmdInput.name = 'cmd';
+      cmdInput.value = '_donations';
+      form.appendChild(cmdInput);
+      
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+      
+      showNotification('Opening PayPal donation page in new window... Thank you! 💖');
+    }
+
+    function renderApp() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const footerText = config.footer_text || defaultConfig.footer_text;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+
+      let content = '';
+      if (currentView === 'home') {
+        content = renderHomeView();
+      } else if (currentView === 'modules') {
+        content = renderModulesView();
+      } else if (currentView === 'lessons') {
+        content = renderLessonsView();
+      } else if (currentView === 'lesson') {
+        content = renderLessonView();
+      } else if (currentView === 'tools') {
+        content = renderToolsView();
+      } else if (currentView === 'resources') {
+        content = renderResourcesView();
+      } else if (currentView === 'about') {
+        content = renderAboutView();
+      } else if (currentView === 'contact') {
+        content = renderContactView();
+      }
+
+      document.getElementById('app').innerHTML = `
+        ${content}
+        
+        <!-- Donation Section -->
+        <div class="max-w-4xl mx-auto px-4 py-12">
+          <div class="p-8 rounded-xl text-center" data-surface style="background-color: ${config.surface_color || defaultConfig.surface_color}; border: 2px solid ${config.primary_action_color || defaultConfig.primary_action_color};">
+            <div class="text-4xl mb-4">💝</div>
+            <h3 class="text-2xl font-bold mb-3" style="color: ${config.primary_action_color || defaultConfig.primary_action_color};">Support Free Education</h3>
+            <p class="text-lg mb-4 opacity-90" style="color: white;">
+              Help us keep this course 100% free and continue creating educational videos, trading journals, and resources for aspiring traders worldwide.
+            </p>
+            <p class="text-sm mb-6 opacity-80" style="color: white;">
+              Your $1 donation helps us:
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-sm">
+              <div class="p-4 rounded-lg" style="background-color: ${config.background_color || defaultConfig.background_color}; color: white;">
+                <div class="text-2xl mb-2">📚</div>
+                <strong style="color: white;">Free Access</strong>
+                <p class="text-xs opacity-70 mt-1" style="color: white;">Keep all courses free for everyone</p>
+              </div>
+              <div class="p-4 rounded-lg" style="background-color: ${config.background_color || defaultConfig.background_color}; color: white;">
+                <div class="text-2xl mb-2">📹</div>
+                <strong style="color: white;">Video Lessons</strong>
+                <p class="text-xs opacity-70 mt-1" style="color: white;">Produce quality educational videos</p>
+              </div>
+              <div class="p-4 rounded-lg" style="background-color: ${config.background_color || defaultConfig.background_color}; color: white;">
+                <div class="text-2xl mb-2">📝</div>
+                <strong style="color: white;">Trading Journals</strong>
+                <p class="text-xs opacity-70 mt-1" style="color: white;">Develop advanced tracking tools</p>
+              </div>
+            </div>
+            <button onclick="handleDonation()"
+                    class="btn-hover px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105"
+                    data-primary-btn
+                    style="background-color: ${config.primary_action_color || defaultConfig.primary_action_color}; color: white;">
+              💖 Donate $1 to Support Free Education
+            </button>
+            <p class="text-xs mt-4 opacity-60" style="color: white;">Every contribution, no matter how small, makes a difference</p>
+          </div>
+        </div>
+        
+        <footer class="text-center py-8 text-sm border-t-2 glow" style="color: #FFD700; background: linear-gradient(180deg, #000000 0%, #1a1a1a 100%); border-color: #FFD700; text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);">
+          <div class="mb-2 text-lg font-bold" style="color: #FFD700;">💹 G.W FX Trading Academy</div>
+          <div class="mb-3">${footerText}</div>
+          <div class="flex justify-center gap-6 mb-3 text-base">
+            <span class="cursor-pointer hover:scale-110 transition-transform" style="text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);">📧</span>
+            <span class="cursor-pointer hover:scale-110 transition-transform" style="text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);">💬</span>
+            <span class="cursor-pointer hover:scale-110 transition-transform" style="text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);">🌐</span>
+            <span class="cursor-pointer hover:scale-110 transition-transform" style="text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);">📱</span>
+          </div>
+          <div class="text-xs opacity-70">Trading involves risk. Past performance does not guarantee future results.</div>
+        </footer>
+      `;
+    }
+
+    async function init() {
+      if (window.elementSdk) {
+        window.elementSdk.init({
+          defaultConfig,
+          onConfigChange,
+          mapToCapabilities: (config) => ({
+            recolorables: [
+              {
+                get: () => config.background_color || defaultConfig.background_color,
+                set: (value) => {
+                  config.background_color = value;
+                  window.elementSdk.setConfig({ background_color: value });
+                }
+              },
+              {
+                get: () => config.surface_color || defaultConfig.surface_color,
+                set: (value) => {
+                  config.surface_color = value;
+                  window.elementSdk.setConfig({ surface_color: value });
+                }
+              },
+              {
+                get: () => config.text_color || defaultConfig.text_color,
+                set: (value) => {
+                  config.text_color = value;
+                  window.elementSdk.setConfig({ text_color: value });
+                }
+              },
+              {
+                get: () => config.primary_action_color || defaultConfig.primary_action_color,
+                set: (value) => {
+                  config.primary_action_color = value;
+                  window.elementSdk.setConfig({ primary_action_color: value });
+                }
+              },
+              {
+                get: () => config.secondary_action_color || defaultConfig.secondary_action_color,
+                set: (value) => {
+                  config.secondary_action_color = value;
+                  window.elementSdk.setConfig({ secondary_action_color: value });
+                }
+              }
+            ],
+            borderables: [],
+            fontEditable: {
+              get: () => config.font_family || defaultConfig.font_family,
+              set: (value) => {
+                config.font_family = value;
+                window.elementSdk.setConfig({ font_family: value });
+              }
+            },
+            fontSizeable: {
+              get: () => config.font_size || defaultConfig.font_size,
+              set: (value) => {
+                config.font_size = value;
+                window.elementSdk.setConfig({ font_size: value });
+              }
+            }
+          }),
+          mapToEditPanelValues: (config) => new Map([
+            ["course_title", config.course_title || defaultConfig.course_title],
+            ["welcome_message", config.welcome_message || defaultConfig.welcome_message],
+            ["footer_text", config.footer_text || defaultConfig.footer_text]
+          ])
+        });
+      }
+
+      if (window.dataSdk) {
+        const initResult = await window.dataSdk.init(dataHandler);
+        if (!initResult.isOk) {
+          console.error("Failed to initialize data SDK");
+        }
+      }
+
+      // Fetch initial Forex rates
+      await fetchForexRates();
+
+      renderApp();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b823515026a6914',t:'MTc2NzQ0MDI4MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
